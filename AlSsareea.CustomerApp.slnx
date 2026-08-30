@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AlSsareea.CustomerApp.Core/AlSsareea.CustomerApp.Core.csproj" />
+    <Project Path="src/AlSsareea.CustomerApp/AlSsareea.CustomerApp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AlSsareea.CustomerApp.UnitTests/AlSsareea.CustomerApp.UnitTests.csproj" />
+  </Folder>
+</Solution>

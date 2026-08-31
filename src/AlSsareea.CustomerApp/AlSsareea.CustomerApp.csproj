@@ -81,6 +81,14 @@
 		<DefineConstants>$(DefineConstants);FIREBASE_CONFIGURED</DefineConstants>
 	</PropertyGroup>
 
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' And '$(Configuration)' == 'Debug'">
+		<AndroidManifestPlaceholders>usesCleartextTraffic=true</AndroidManifestPlaceholders>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' And '$(Configuration)' != 'Debug'">
+		<AndroidManifestPlaceholders>usesCleartextTraffic=false</AndroidManifestPlaceholders>
+	</PropertyGroup>
+
 	<ItemGroup>
 	  <ProjectReference Include="..\AlSsareea.CustomerApp.Core\AlSsareea.CustomerApp.Core.csproj" />
 	</ItemGroup>

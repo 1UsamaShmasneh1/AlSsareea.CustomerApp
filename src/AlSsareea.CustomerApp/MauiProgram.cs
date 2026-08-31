@@ -8,7 +8,11 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         MauiAppBuilder builder = MauiApp.CreateBuilder();
-        builder.UseMauiApp<App>().UseMauiMaps().ConfigureFonts(fonts =>
+        builder.UseMauiApp<App>();
+#if ANDROID || IOS || MACCATALYST
+        builder.UseMauiMaps();
+#endif
+        builder.ConfigureFonts(fonts =>
         {
             fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
             fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
@@ -88,9 +92,9 @@ public static class MauiProgram
         string? configured = Environment.GetEnvironmentVariable("ALSSAREEA_API_BASE_URL");
         if (Uri.TryCreate(configured, UriKind.Absolute, out Uri? value)) return value;
 #if ANDROID
-        return new("https://10.0.2.2:7080/");
+        return new("http://10.0.2.2:5257/");
 #else
-        return new("https://localhost:7080/");
+        return new("http://localhost:5257/");
 #endif
     }
 }

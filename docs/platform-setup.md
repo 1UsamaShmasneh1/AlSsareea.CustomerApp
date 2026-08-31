@@ -2,7 +2,7 @@
 
 ## Android
 
-The Android emulator reaches the Windows backend through `https://10.0.2.2:7080/`. Development HTTPS trust must be configured on the emulator or a local-only HTTP endpoint must be selected explicitly. Internet, network-state, and Android 13 notification permissions are declared.
+The Android emulator reaches the Backend `http` launch profile through `http://10.0.2.2:5257/`. Cleartext traffic is permitted only in Debug; non-Debug Android manifests explicitly disable it. Windows uses `http://localhost:5257/`. Override `ALSSAREEA_API_BASE_URL` for a physical device or a different development host. Internet, network-state, and Android 13 notification permissions are declared.
 
 MAUI Maps requires a Google Maps Android client key supplied through deployment configuration. FCM uses Microsoft's maintained `Xamarin.Firebase.Messaging` 124.1.2 binding. Register Android package `com.alssareea.customer` in Firebase, download its configuration to `src/AlSsareea.CustomerApp/Platforms/Android/google-services.json`, and rebuild. The file is intentionally absent and ignored; when present, the build enables token acquisition. The native service handles token refresh and data messages, while shared code performs replacement-first backend registration and safe navigation.
 

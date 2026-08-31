@@ -14,7 +14,16 @@ Splash → onboarding or session restoration → login → five-tab Shell (Home,
 
 ## Local setup
 
-Install SDK 10.0.400 and the `android`, `ios`, `maccatalyst`, and `maui-windows` workloads. The default backend URL is `https://10.0.2.2:7080/` on the Android emulator and `https://localhost:7080/` elsewhere. Override it locally with `ALSSAREEA_API_BASE_URL`; do not commit production URLs or credentials.
+Install SDK 10.0.400 and the `android`, `ios`, `maccatalyst`, and `maui-windows` workloads. The Debug backend URL is `http://10.0.2.2:5257/` on the Android emulator and `http://localhost:5257/` elsewhere, matching the Backend `http` launch profile. Android cleartext traffic is enabled only for Debug and explicitly disabled for non-Debug builds. Override the URL locally with `ALSSAREEA_API_BASE_URL` (a physical Android device normally needs the development machine's reachable LAN URL); do not commit production URLs or credentials.
+
+## Local Development / Visual Studio
+
+1. Start Docker Desktop, open `AlSsareea.Backend.slnx`, set `AlSsareea.Api` as the startup project, select the `http` profile, and ensure the repository's `postgres` Compose service is healthy. A fresh database requires every module's existing EF Core migration to be applied as documented by the Backend repository.
+2. Press F5 for the Backend and verify `http://localhost:5257/health/ready` and `http://localhost:5257/api/system/info` return HTTP 200.
+3. Open `AlSsareea.CustomerApp.slnx`, set `AlSsareea.CustomerApp` as the startup project, select `Windows Machine`, and press F5.
+4. For Android, install the emulator component and a compatible AVD (or connect a physical device), select that target, and press F5. The standard Android emulator uses `10.0.2.2` to reach the Windows host; use `ALSSAREEA_API_BASE_URL` for a physical device.
+
+Firebase and Google Maps credentials are optional external development configuration. `google-services.json` belongs at `src/AlSsareea.CustomerApp/Platforms/Android/google-services.json`; never fabricate or commit it. Without Firebase or Maps credentials, ordinary startup remains available, while the corresponding external capability cannot be runtime-validated.
 
 Run:
 

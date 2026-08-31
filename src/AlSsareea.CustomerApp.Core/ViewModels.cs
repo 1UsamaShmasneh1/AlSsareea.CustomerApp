@@ -133,24 +133,90 @@ public sealed class ProductViewModel(ICatalogApi catalog, ICartApi carts, Custom
 {
     private int adding;
     private Guid merchantId;
-    private ProductResponse? product;
+    private CustomerProductDetailsResponse? product;
     private CatalogPriceResponse? price;
+    private Guid? selectedVariantId;
+    private IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> selectedOptions = new Dictionary<Guid, IReadOnlySet<Guid>>();
     private int quantity = 1;
-    public ProductResponse? Product { get => product; private set => Set(ref product, value); }
+    private string customerNote = string.Empty;
+    private string? selectionError;
+    public CustomerProductDetailsResponse? Product { get => product; private set => Set(ref product, value); }
     public CatalogPriceResponse? Price { get => price; private set => Set(ref price, value); }
+    public Guid? SelectedVariantId { get => selectedVariantId; private set => Set(ref selectedVariantId, value); }
+    public IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> SelectedOptions { get => selectedOptions; private set => Set(ref selectedOptions, value); }
     public int Quantity { get => quantity; set => Set(ref quantity, Math.Clamp(value, 1, 99)); }
-    public string OptionsAvailabilityMessage => Text["ProductOptionsBackendUnavailable"];
+    public string CustomerNote { get => customerNote; set => Set(ref customerNote, value); }
+    public string? SelectionError { get => selectionError; private set => Set(ref selectionError, value); }
+    public IReadOnlyList<CustomerProductMediaResponse> Media => Product?.Media.OrderBy(item => item.IsPrimary ? 0 : 1).ThenBy(item => item.SortOrder).ToArray() ?? [];
+    public IReadOnlyList<CustomerProductVariantResponse> Variants => Product?.Variants.OrderBy(item => item.SortOrder).ToArray() ?? [];
+    public IReadOnlyList<CustomerProductOptionGroupResponse> OptionGroups => Product?.OptionGroups.OrderBy(item => item.SortOrder).ToArray() ?? [];
+    public bool IsSelected(CustomerProductVariantResponse variant) => SelectedVariantId == variant.Id;
+    public bool IsSelected(CustomerProductOptionGroupResponse group, CustomerProductOptionResponse option) => SelectedOptions.TryGetValue(group.Id, out IReadOnlySet<Guid>? values) && values.Contains(option.Id);
     public Task LoadAsync(Guid merchant, Guid productId) => RunAsync(async () =>
     {
         merchantId = merchant;
-        Product = await catalog.ProductAsync(merchant, productId, preferences.Language, default);
-        Price = await catalog.PriceAsync(merchant, productId, new(null, [], preferences.Language), default);
+        Product = await catalog.ProductAsync(merchant, productId, preferences.Language, appState.BranchId, default);
+        SelectedVariantId = Product.Variants.Where(item => item.IsAvailable && item.IsDefault).OrderBy(item => item.SortOrder).Select(item => (Guid?)item.Id).FirstOrDefault();
+        SelectedOptions = Product.OptionGroups.ToDictionary(
+            group => group.Id,
+            group => (IReadOnlySet<Guid>)group.Options.Where(option => option.IsAvailable && option.IsDefault).Take(group.MaxSelections).Select(option => option.Id).ToHashSet());
+        await RepriceCoreAsync();
         State = RemoteStateKind.Content;
     });
+    public async Task SelectVariantAsync(CustomerProductVariantResponse variant)
+    {
+        if (!variant.IsAvailable || Product is null) return;
+        SelectedVariantId = variant.Id;
+        await RepriceAsync();
+    }
+    public async Task ToggleOptionAsync(CustomerProductOptionGroupResponse group, CustomerProductOptionResponse option)
+    {
+        if (!option.IsAvailable || Product is null) return;
+        var changed = SelectedOptions.ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet());
+        if (!changed.TryGetValue(group.Id, out HashSet<Guid>? values)) changed[group.Id] = values = [];
+        if (values.Contains(option.Id)) values.Remove(option.Id);
+        else if (group.SelectionType == 1) { values.Clear(); values.Add(option.Id); }
+        else if (values.Count < group.MaxSelections) values.Add(option.Id);
+        else { SelectionError = string.Format(Text["OptionMaximumReached"], group.MaxSelections); return; }
+        SelectedOptions = changed.ToDictionary(pair => pair.Key, pair => (IReadOnlySet<Guid>)pair.Value);
+        SelectionError = null;
+        await RepriceAsync();
+    }
+    public Task RepriceAsync() => RunAsync(async () => { await RepriceCoreAsync(); State = RemoteStateKind.Content; }, true);
+    private async Task RepriceCoreAsync()
+    {
+        if (Product is null) return;
+        Price = await catalog.PriceAsync(merchantId, Product.Id, new(SelectedVariantId, SelectedOptions.Values.SelectMany(value => value).ToArray(), preferences.Language), default);
+    }
+    public bool ValidateSelections()
+    {
+        if (Product is null || !Product.IsAvailable) { SelectionError = Text["ProductUnavailable"]; return false; }
+        foreach (CustomerProductOptionGroupResponse group in OptionGroups)
+        {
+            int count = SelectedOptions.TryGetValue(group.Id, out IReadOnlySet<Guid>? values) ? values.Count : 0;
+            int minimum = Math.Max(group.IsRequired ? 1 : 0, group.MinSelections);
+            if (count < minimum) { SelectionError = string.Format(Text["OptionMinimumRequired"], group.Text.Name, minimum); return false; }
+            if (count > group.MaxSelections || group.SelectionType == 1 && count > 1) { SelectionError = string.Format(Text["OptionMaximumReached"], group.MaxSelections); return false; }
+        }
+        SelectionError = null;
+        return true;
+    }
     public async Task AddToCartAsync()
     {
         if (Interlocked.Exchange(ref adding, 1) != 0) return;
-        try { await RunAsync(async () => { if (Product is null) return; CartResponse cart = appState.Cart ?? await carts.CreateAsync(new(merchantId, appState.BranchId), Guid.NewGuid().ToString("N"), default); cart = await carts.AddAsync(cart.Id, new(Product.Id, null, Quantity, null, [], cart.ConcurrencyStamp), Guid.NewGuid().ToString("N"), default); appState.Cart = cart; appState.MerchantId = merchantId; State = RemoteStateKind.Content; await navigation.GoToAsync(AppRoutes.Cart); }); }
+        try
+        {
+            if (!ValidateSelections()) { State = RemoteStateKind.Error; ErrorMessage = SelectionError; return; }
+            await RunAsync(async () =>
+            {
+                if (Product is null) return;
+                await RepriceCoreAsync();
+                CartResponse cart = appState.Cart ?? await carts.CreateAsync(new(merchantId, appState.BranchId), Guid.NewGuid().ToString("N"), default);
+                CartItemOptionRequest[] options = OptionGroups.SelectMany(group => SelectedOptions.TryGetValue(group.Id, out IReadOnlySet<Guid>? values) ? values.Select(id => new CartItemOptionRequest(group.Id, id)) : []).ToArray();
+                cart = await carts.AddAsync(cart.Id, new(Product.Id, SelectedVariantId, Quantity, string.IsNullOrWhiteSpace(CustomerNote) ? null : CustomerNote.Trim(), options, cart.ConcurrencyStamp), Guid.NewGuid().ToString("N"), default);
+                appState.Cart = cart; appState.MerchantId = merchantId; State = RemoteStateKind.Content; await navigation.GoToAsync(AppRoutes.Cart);
+            });
+        }
         finally { Volatile.Write(ref adding, 0); }
     }
 }
@@ -189,6 +255,12 @@ public sealed class AddressesViewModel(ICustomerApi customer, IMapsApi maps, ICo
     public IReadOnlyList<GeocodingResult> Suggestions { get => suggestions; private set => Set(ref suggestions, value); }
     public Task LoadAsync(bool refresh = false) => RunAsync(async () => { Items = await customer.AddressesAsync(default); State = Items.Count == 0 ? RemoteStateKind.Empty : RemoteStateKind.Content; }, refresh);
     public Task SearchAddressAsync(string query) => RunAsync(async () => { Suggestions = await maps.GeocodeAsync(new(query), default); State = Suggestions.Count == 0 ? RemoteStateKind.Empty : RemoteStateKind.Content; });
+    public async Task<GeocodingResult?> ReverseAsync(double latitude, double longitude)
+    {
+        GeocodingResult? result = null;
+        await RunAsync(async () => { ReverseGeocodingResult normalized = await maps.ReverseGeocodeAsync(new(latitude, longitude), default); result = new(normalized.FormattedAddress, normalized.Latitude, normalized.Longitude, normalized.PlaceId); State = RemoteStateKind.Content; });
+        return result;
+    }
     public async Task<bool> ReverseAndAddAsync(string label, string city, string street, double latitude, double longitude)
     {
         bool added = false;
@@ -216,6 +288,36 @@ public sealed class AddressesViewModel(ICustomerApi customer, IMapsApi maps, ICo
             Items = Items.Append(address).ToArray(); State = RemoteStateKind.Content; eligible = true;
         });
         return eligible;
+    }
+    public async Task<bool> SaveAsync(AddressResponse? existing, AddressRequest request)
+    {
+        bool saved = false;
+        await RunAsync(async () =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Label) || string.IsNullOrWhiteSpace(request.City) || string.IsNullOrWhiteSpace(request.Street))
+            {
+                State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return;
+            }
+            if (request.Latitude.HasValue && request.Longitude.HasValue)
+            {
+                DeliveryEligibilityResponse eligibility = await maps.EligibilityAsync(new(request.Latitude.Value, request.Longitude.Value), default);
+                if (!eligibility.Eligible) { State = RemoteStateKind.Error; ErrorMessage = Text["AddressOutsideArea"]; return; }
+            }
+            AddressRequest normalized = request with
+            {
+                Label = request.Label.Trim(),
+                City = request.City.Trim(),
+                Street = request.Street.Trim(),
+                ConcurrencyStamp = existing?.ConcurrencyStamp
+            };
+            AddressResponse changed = existing is null
+                ? await customer.AddAddressAsync(normalized with { IsDefault = Items.Count == 0 || normalized.IsDefault }, default)
+                : await customer.UpdateAddressAsync(existing.Id, normalized, default);
+            Items = existing is null ? Items.Append(changed).ToArray() : Items.Select(item => item.Id == changed.Id ? changed : item).ToArray();
+            if (changed.IsDefault) Items = Items.Select(item => item.Id == changed.Id ? item : item with { IsDefault = false }).ToArray();
+            State = RemoteStateKind.Content; saved = true;
+        });
+        return saved;
     }
     public Task SetDefaultAsync(AddressResponse address) => RunAsync(async () => { AddressResponse changed = await customer.SetDefaultAddressAsync(address.Id, address.ConcurrencyStamp, default); Items = Items.Select(x => x.Id == changed.Id ? changed : x with { IsDefault = false }).ToArray(); State = RemoteStateKind.Content; });
     public Task DeleteAsync(AddressResponse address) => RunAsync(async () => { await customer.DeleteAddressAsync(address.Id, address.ConcurrencyStamp, default); Items = Items.Where(x => x.Id != address.Id).ToArray(); State = Items.Count == 0 ? RemoteStateKind.Empty : RemoteStateKind.Content; });
@@ -257,9 +359,15 @@ public sealed class OrderDetailsViewModel(IOrdersApi orders, IConnectivityServic
     private OrderDetailsResponse? order;
     public OrderDetailsResponse? Order { get => order; private set => Set(ref order, value); }
     public string StatusLabel => Order is null ? string.Empty : Text[OrderStatusPresentation.Key(Order.Status)];
-    public Task LoadAsync(Guid id) => RunAsync(async () => { Order = await orders.GetAsync(id, default); Raise(nameof(StatusLabel)); State = RemoteStateKind.Content; });
-    public Task TrackAsync() => Order is null ? Task.CompletedTask : navigation.GoToAsync(AppRoutes.Tracking, new Dictionary<string, object> { ["orderId"] = Order.Id });
-    public Task CancelAsync(string reason) => Order is null ? Task.CompletedTask : RunAsync(async () => { Order = await orders.CancelAsync(Order.Id, new(1, "customer_requested", reason, Order.ConcurrencyStamp), default); Raise(nameof(StatusLabel)); State = RemoteStateKind.Content; });
+    public IReadOnlyList<OrderItemResponse> Items => Order?.Items ?? [];
+    public IReadOnlyList<OrderTimelineEntryResponse> Timeline => Order?.Timeline.OrderBy(item => item.ChangedAtUtc).ToArray() ?? [];
+    public bool CanCancel => Order is not null && OrderCapabilities.CanCancel(Order.Status);
+    public bool CanTrack => Order is not null && OrderCapabilities.CanTrack(Order.Status);
+    public string TimelineLabel(OrderTimelineEntryResponse item) => Text[OrderStatusPresentation.Key(item.NewStatus)];
+    public Task LoadAsync(Guid id) => RunAsync(async () => { Order = await orders.GetAsync(id, default); RaiseDetails(); State = RemoteStateKind.Content; });
+    public Task TrackAsync() => !CanTrack || Order is null ? Task.CompletedTask : navigation.GoToAsync(AppRoutes.Tracking, new Dictionary<string, object> { ["orderId"] = Order.Id });
+    public Task CancelAsync(string reason) => !CanCancel || Order is null ? Task.CompletedTask : RunAsync(async () => { Order = await orders.CancelAsync(Order.Id, new(1, "customer_requested", reason, Order.ConcurrencyStamp), default); RaiseDetails(); State = RemoteStateKind.Content; });
+    private void RaiseDetails() { Raise(nameof(StatusLabel)); Raise(nameof(Items)); Raise(nameof(Timeline)); Raise(nameof(CanCancel)); Raise(nameof(CanTrack)); }
 }
 
 public sealed class NotificationsViewModel(INotificationsApi notifications, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation) : RemoteViewModel(connectivity, text)
@@ -289,6 +397,11 @@ public sealed class ProfileViewModel(ICustomerApi customer, IAccountSessionApi a
     private CustomerResponse? customerValue;
     public CustomerResponse? Customer { get => customerValue; private set => Set(ref customerValue, value); }
     public Task LoadAsync() => RunAsync(async () => { Customer = await customer.GetAsync(default); State = RemoteStateKind.Content; });
+    public Task UpdateAsync(string firstName, string lastName, DateOnly? dateOfBirth)
+    {
+        if (Customer is null || string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return Task.CompletedTask; }
+        return RunAsync(async () => { Customer = await customer.UpdateAsync(new(firstName.Trim(), lastName.Trim(), dateOfBirth, Customer.ConcurrencyStamp), default); State = RemoteStateKind.Content; });
+    }
     public void ChangeLanguage(string language) { preferences.Language = language; Text.Apply(language); }
     public async Task LogoutAsync()
     {

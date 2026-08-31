@@ -27,8 +27,16 @@ public interface IPushTokenSource
     event EventHandler<string>? TokenChanged;
 }
 
-public sealed class PushRegistrationCoordinator(INotificationsApi notifications, IPushTokenSource source) : IUserStateResetter, IAsyncDisposable
+public interface IPushRegistrationStore
 {
+    Task<Guid?> GetAsync(CancellationToken ct);
+    Task SetAsync(Guid id, CancellationToken ct);
+    Task ClearAsync(CancellationToken ct);
+}
+
+public sealed class PushRegistrationCoordinator(INotificationsApi notifications, IPushTokenSource source, IPushRegistrationStore store) : IUserStateResetter, IAsyncDisposable
+{
+    private readonly SemaphoreSlim gate = new(1, 1);
     private Guid? registeredId;
     private bool subscribed;
     public async Task RegisterAsync(CancellationToken ct)
@@ -50,17 +58,26 @@ public sealed class PushRegistrationCoordinator(INotificationsApi notifications,
     }
     private async Task ReplaceAsync(string token, CancellationToken ct)
     {
-        DeviceTokenResponse replacement = await notifications.RegisterAsync(new(token, source.Platform, source.Provider), ct);
-        Guid? old = registeredId;
-        registeredId = replacement.Id;
-        if (old.HasValue && old != replacement.Id) await notifications.UnregisterAsync(old.Value, ct);
+        await gate.WaitAsync(ct);
+        try
+        {
+            registeredId ??= await store.GetAsync(ct);
+            DeviceTokenResponse replacement = await notifications.RegisterAsync(new(token, source.Platform, source.Provider), ct);
+            Guid? old = registeredId;
+            registeredId = replacement.Id;
+            await store.SetAsync(replacement.Id, ct);
+            if (old.HasValue && old != replacement.Id) await notifications.UnregisterAsync(old.Value, ct);
+        }
+        finally { gate.Release(); }
     }
     public async Task ResetAsync(CancellationToken ct)
     {
         source.TokenChanged -= TokenChanged;
         subscribed = false;
+        registeredId ??= await store.GetAsync(ct);
         if (registeredId.HasValue) await notifications.UnregisterAsync(registeredId.Value, ct);
         registeredId = null;
+        await store.ClearAsync(ct);
     }
-    public ValueTask DisposeAsync() { source.TokenChanged -= TokenChanged; subscribed = false; return ValueTask.CompletedTask; }
+    public ValueTask DisposeAsync() { source.TokenChanged -= TokenChanged; subscribed = false; gate.Dispose(); return ValueTask.CompletedTask; }
 }

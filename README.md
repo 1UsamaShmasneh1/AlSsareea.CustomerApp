@@ -38,14 +38,12 @@ Geocode, reverse-geocode, and delivery eligibility come from backend Maps contra
 
 ## Push
 
-The shared coordinator registers tokens with Android=1/FCM=1 or iOS=2/APNs=2, registers rotated replacements first, then removes the prior backend device-token record. iOS captures APNs device tokens natively. Android provides the token bridge expected from the deployment's Firebase Messaging integration, but remains disabled until a real `google-services.json` and compatible FCM package/configuration are supplied. Provider files and signing material are ignored. Push permission is requested contextually, not at first frame.
+The shared coordinator registers tokens with Android=1/FCM=1 or iOS=2/APNs=2, persists only the backend registration ID, registers rotated replacements first, then removes the prior backend record. iOS captures APNs tokens natively. Android uses Microsoft's maintained `Xamarin.Firebase.Messaging` 124.1.2 binding, obtains and refreshes FCM tokens, receives data messages, displays native notifications, and forwards payloads to the centralized authenticated deep-link dispatcher. A real `Platforms/Android/google-services.json` remains deployment-owned and ignored. Push permission is requested contextually, not at first frame.
 
 ## Tracking and resilience
 
 Tracking loads the REST snapshot, connects to `/hubs/tracking` using only the active access token, invokes `SubscribeOrder`, and listens for `LocationUpdated`. Automatic reconnect reloads REST state and re-subscribes because SignalR groups do not survive reconnection. Connectivity is abstracted for testable offline UI.
 
-## Known backend/deferred scope
+## Phase boundaries
 
-The public Catalog product response does not expose variant/option definitions or product media references. The app therefore uses the authoritative price endpoint for the selectable empty option set and does not fabricate option or image data. Completing rich option selection/media requires an explicit customer-safe backend contract. Electronic payment is Phase 22. Support is Phase 24.
-
-Phase 18B is not declared complete in this revision. In addition to that backend contract blocker, remaining client work includes moving every page-level literal into the English/Arabic/Hebrew resources, adding address editing and complete order item/timeline presentation, wiring a concrete Android Firebase Messaging receiver once the deployment selects a compatible binding, and completing the remaining ViewModel/HTTP test cases. The current resource parity test proves only that the resource files agree; it does not claim that every visible page literal has been externalized.
+The verified Catalog customer product-details contract now drives ordered media, variants, option groups, availability, stable Cart IDs, and backend-authoritative configured pricing. Electronic payment remains Phase 22 and Support remains Phase 24. Real FCM/APNs delivery and Android map tiles still require deployment credentials and supported devices; no provider credentials are committed.

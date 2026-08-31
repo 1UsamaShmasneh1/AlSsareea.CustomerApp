@@ -64,7 +64,7 @@ public interface ICatalogApi
     Task<IReadOnlyList<CategoryResponse>> CategoriesAsync(Guid merchantId, string language, CancellationToken ct);
     Task<IReadOnlyList<MenuSectionResponse>> SectionsAsync(Guid merchantId, string language, CancellationToken ct);
     Task<ProductListResponse> ProductsAsync(Guid merchantId, int page, int pageSize, string? query, Guid? categoryId, string language, CancellationToken ct);
-    Task<ProductResponse> ProductAsync(Guid merchantId, Guid productId, string language, CancellationToken ct);
+    Task<CustomerProductDetailsResponse> ProductAsync(Guid merchantId, Guid productId, string language, Guid? branchId, CancellationToken ct);
     Task<CatalogPriceResponse> PriceAsync(Guid merchantId, Guid productId, PriceRequest request, CancellationToken ct);
 }
 
@@ -79,7 +79,12 @@ public sealed class CatalogApi(ApiClient api) : ICatalogApi
         if (categoryId.HasValue) path += $"&categoryId={categoryId.Value}";
         return api.SendAsync<ProductListResponse>(HttpMethod.Get, path, null, ct);
     }
-    public Task<ProductResponse> ProductAsync(Guid merchantId, Guid productId, string language, CancellationToken ct) => api.SendAsync<ProductResponse>(HttpMethod.Get, $"api/v1/merchants/{merchantId}/catalog/products/{productId}?language={Uri.EscapeDataString(language)}", null, ct);
+    public Task<CustomerProductDetailsResponse> ProductAsync(Guid merchantId, Guid productId, string language, Guid? branchId, CancellationToken ct)
+    {
+        string path = $"api/v1/merchants/{merchantId}/catalog/products/{productId}?language={Uri.EscapeDataString(language)}";
+        if (branchId.HasValue) path += $"&branchId={branchId.Value}";
+        return api.SendAsync<CustomerProductDetailsResponse>(HttpMethod.Get, path, null, ct);
+    }
     public Task<CatalogPriceResponse> PriceAsync(Guid merchantId, Guid productId, PriceRequest request, CancellationToken ct) => api.SendAsync<CatalogPriceResponse>(HttpMethod.Post, $"api/v1/merchants/{merchantId}/catalog/products/{productId}/price", request, ct);
 }
 

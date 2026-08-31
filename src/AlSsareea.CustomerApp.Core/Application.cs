@@ -102,6 +102,8 @@ public static class UiErrorMapper
         ApiException { Problem.Status: 401 } => text["ErrorUnauthorized"],
         ApiException { Problem.Status: 403 } => text["ErrorForbidden"],
         ApiException { Problem.Status: 404 } => text["ErrorNotFound"],
+        ApiException { Problem.Status: 400 or 422 } => text["ErrorValidation"],
+        ApiException { Problem.Status: 410 } => text["ErrorOtpExpired"],
         ApiException { Problem.Status: 409 } => text["ErrorConflict"],
         ApiException { Problem.Status: >= 500 } => text["ErrorUnavailable"],
         ApiTimeoutException => text["ErrorTimeout"],
@@ -172,6 +174,12 @@ public static class OrderStatusPresentation
     };
 }
 
+public static class OrderCapabilities
+{
+    public static bool CanCancel(short status) => status is 2 or 3 or 4 or 5 or 7 or 8 or 9 or 10 or 11;
+    public static bool CanTrack(short status) => status is 12 or 13 or 14;
+}
+
 public sealed record DeepLinkDestination(string Route, Guid Id);
 public static class DeepLinkParser
 {
@@ -188,5 +196,42 @@ public static class DeepLinkParser
             "notifications" => new(AppRoutes.Notifications, id),
             _ => null
         };
+    }
+}
+
+public static class PushPayloadParser
+{
+    public static DeepLinkDestination? Parse(IReadOnlyDictionary<string, string> data)
+    {
+        if (TryValue(data, "deepLink", out string? deepLink) && Uri.TryCreate(deepLink, UriKind.Absolute, out Uri? uri)) return DeepLinkParser.Parse(uri);
+        if (!TryValue(data, "destination", out string? destination)) TryValue(data, "type", out destination);
+        string idKey = string.Equals(destination, "notifications", StringComparison.OrdinalIgnoreCase) ? "notificationId" : "orderId";
+        if (!TryValue(data, idKey, out string? rawId) || !Guid.TryParse(rawId, out Guid id)) return null;
+        return destination?.ToLowerInvariant() switch
+        {
+            "order" or "orders" or "order-details" => new(AppRoutes.OrderDetails, id),
+            "tracking" => new(AppRoutes.Tracking, id),
+            "notification" or "notifications" => new(AppRoutes.Notifications, id),
+            _ => null
+        };
+    }
+
+    private static bool TryValue(IReadOnlyDictionary<string, string> data, string key, out string? value)
+    {
+        KeyValuePair<string, string> item = data.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase));
+        value = item.Value;
+        return !string.IsNullOrWhiteSpace(value);
+    }
+}
+
+public sealed class PushMessageDispatcher(ISessionManager session, INavigationService navigation)
+{
+    public async Task<bool> DispatchAsync(IReadOnlyDictionary<string, string> data)
+    {
+        DeepLinkDestination? destination = PushPayloadParser.Parse(data);
+        if (destination is null || !session.IsAuthenticated) return false;
+        string key = destination.Route == AppRoutes.Notifications ? "notificationId" : "orderId";
+        await navigation.GoToAsync(destination.Route, new Dictionary<string, object> { [key] = destination.Id });
+        return true;
     }
 }

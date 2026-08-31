@@ -364,6 +364,7 @@ FodyWeavers.xsd
 
 # Deployment-owned mobile provider configuration
 google-services.json
+Platforms/Android/google-services.json
 GoogleService-Info.plist
 *.keystore
 *.p12

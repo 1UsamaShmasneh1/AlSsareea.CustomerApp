@@ -11,5 +11,18 @@ public class MainApplication : MauiApplication
     {
     }
 
+    public override void OnCreate()
+    {
+        base.OnCreate();
+#if FIREBASE_CONFIGURED
+        PushTokenBridge.AndroidFirebaseConfigured = true;
+        PushTokenBridge.AndroidTokenResolver = async ct =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return await Firebase.Messaging.FirebaseMessaging.Instance.GetToken();
+        };
+#endif
+    }
+
     protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
 }

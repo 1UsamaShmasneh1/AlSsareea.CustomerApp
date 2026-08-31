@@ -27,6 +27,19 @@ public sealed class MauiPreferencesStore : IPreferencesStore
     private static string Normalize(string value) => value is "ar" or "he" ? value : "en";
 }
 
+public sealed class PushRegistrationPreferencesStore : IPushRegistrationStore
+{
+    private const string RegistrationKey = "push.registration.id.v1";
+    public Task<Guid?> GetAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        string? value = Preferences.Default.Get<string?>(RegistrationKey, null);
+        return Task.FromResult(Guid.TryParse(value, out Guid id) ? (Guid?)id : null);
+    }
+    public Task SetAsync(Guid id, CancellationToken ct) { ct.ThrowIfCancellationRequested(); Preferences.Default.Set(RegistrationKey, id.ToString("D")); return Task.CompletedTask; }
+    public Task ClearAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); Preferences.Default.Remove(RegistrationKey); return Task.CompletedTask; }
+}
+
 public sealed class MauiLocalizationService : ILocalizationService
 {
     private static readonly ResourceManager Resources = new("AlSsareea.CustomerApp.Resources.Strings.AppResources", Assembly.GetExecutingAssembly());
@@ -91,7 +104,13 @@ public sealed class PushTokenBridge : IPushTokenSource
     public short Provider => OperatingSystem.IsAndroid() ? PushValues.Fcm : PushValues.Apns;
     public bool IsConfigured => OperatingSystem.IsIOS() || OperatingSystem.IsAndroid() && AndroidFirebaseConfigured;
     public static bool AndroidFirebaseConfigured { get; set; }
+    public static Func<CancellationToken, Task<string?>>? AndroidTokenResolver { get; set; }
     public event EventHandler<string>? TokenChanged;
-    public Task<string?> GetTokenAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(token); }
+    public async Task<string?> GetTokenAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (OperatingSystem.IsAndroid() && AndroidFirebaseConfigured && AndroidTokenResolver is not null) token = await AndroidTokenResolver(ct);
+        return token;
+    }
     public void Publish(string value) { token = value; TokenChanged?.Invoke(this, value); }
 }

@@ -4,16 +4,17 @@ namespace AlSsareea.CustomerApp;
 
 public sealed class AppShell : Shell
 {
-    public AppShell()
+    public AppShell(ILocalizationService text, IPreferencesStore preferences)
     {
+        text.Apply(preferences.Language);
         FlyoutBehavior = FlyoutBehavior.Disabled;
         Items.Add(new ShellContent { Route = AppRoutes.Splash, ContentTemplate = new DataTemplate(typeof(SplashPage)), FlyoutItemIsVisible = false });
         var tabs = new TabBar { Route = "main" };
-        tabs.Items.Add(Tab("Home", "home", typeof(MainPage)));
-        tabs.Items.Add(Tab("Search", "search", typeof(SearchPage)));
-        tabs.Items.Add(Tab("Cart", "cart", typeof(CartPage)));
-        tabs.Items.Add(Tab("Orders", "orders", typeof(OrdersPage)));
-        tabs.Items.Add(Tab("Profile", "profile", typeof(ProfilePage)));
+        tabs.Items.Add(Tab(text["Home"], "home", typeof(MainPage)));
+        tabs.Items.Add(Tab(text["Search"], "search", typeof(SearchPage)));
+        tabs.Items.Add(Tab(text["Cart"], "cart", typeof(CartPage)));
+        tabs.Items.Add(Tab(text["Orders"], "orders", typeof(OrdersPage)));
+        tabs.Items.Add(Tab(text["Profile"], "profile", typeof(ProfilePage)));
         Items.Add(tabs);
         Register(AppRoutes.Onboarding, typeof(OnboardingPage));
         Register(AppRoutes.Login, typeof(LoginPage));

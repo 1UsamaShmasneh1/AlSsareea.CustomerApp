@@ -50,10 +50,12 @@ public static class MauiProgram
         builder.Services.AddSingleton<IUserStateResetter>(sp => sp.GetRequiredService<TrackingCoordinator>());
         builder.Services.AddSingleton<PushTokenBridge>();
         builder.Services.AddSingleton<IPushTokenSource>(sp => sp.GetRequiredService<PushTokenBridge>());
+        builder.Services.AddSingleton<IPushRegistrationStore, PushRegistrationPreferencesStore>();
         builder.Services.AddSingleton<PushRegistrationCoordinator>();
         builder.Services.AddSingleton<IUserStateResetter>(sp => sp.GetRequiredService<PushRegistrationCoordinator>());
         builder.Services.AddSingleton<UserStateResetter>();
         builder.Services.AddSingleton<IPushPermissionService, PushPermissionService>();
+        builder.Services.AddSingleton<PushMessageDispatcher>();
 
         builder.Services.AddTransient<SplashViewModel>();
         builder.Services.AddTransient<OnboardingViewModel>();

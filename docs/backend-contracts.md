@@ -18,7 +18,7 @@ All paths were inspected against the Phase 18A backend source. JSON is camelCase
 | Catalog | `GET /api/v1/merchants/{merchantId}/catalog/categories` | Public scoped categories |
 | Catalog | `GET /api/v1/merchants/{merchantId}/catalog/sections` | Public scoped sections |
 | Catalog | `GET /api/v1/merchants/{merchantId}/catalog/products` | Scoped pagination/query/category |
-| Catalog | `GET /api/v1/merchants/{merchantId}/catalog/products/{id}` | Public product metadata |
+| Catalog | `GET /api/v1/merchants/{merchantId}/catalog/products/{id}?language=&branchId=` | Customer product details with media, variants, options, selection limits, availability, and stable Cart IDs |
 | Pricing | `POST /api/v1/merchants/{merchantId}/catalog/products/{id}/price` | Authoritative selection price |
 | Cart | `/api/carts` family | Active/create/add/patch/remove/reprice/summary with concurrency and mutation keys |
 | Maps | `POST /api/v1/maps/geocode` | Authenticated normalized suggestions |
@@ -29,6 +29,6 @@ All paths were inspected against the Phase 18A backend source. JSON is camelCase
 | Tracking | `/hubs/tracking` | JWT access-token provider, `SubscribeOrder`, `LocationUpdated` |
 | Notifications | `/api/v1/notifications` family | Inbox/read/read-all/preferences/device registration |
 
-## Explicit contract limitation
+## Product configuration boundary
 
-The current customer-safe `ProductResponse` includes product metadata but no variant collection, option-group definitions, option availability, or media reference collection. The price endpoint accepts IDs but cannot teach a client which IDs are selectable. The CustomerApp does not copy backend domain models or invent options. A future backend contract must expose customer-safe product configuration/media before rich product-option and image UI can be considered functional.
+The customer details response supplies only public product media URLs and customer-safe configuration fields. CustomerApp maps `variant.id`, `optionGroup.id`, and `option.id` directly to the existing Cart request and sends the selected IDs to the existing price endpoint. It never derives IDs from labels, reads Media persistence, or treats the locally displayed adjustment sum as authoritative.

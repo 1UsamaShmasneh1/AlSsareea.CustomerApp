@@ -361,3 +361,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Deployment-owned mobile provider configuration
+google-services.json
+GoogleService-Info.plist
+*.keystore
+*.p12
+*.mobileprovision

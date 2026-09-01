@@ -23,18 +23,24 @@ public sealed class OnboardingViewModel(IPreferencesStore preferences, ILocaliza
     }
 }
 
-public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager session, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation) : RemoteViewModel(connectivity, text)
+public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager session, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation, IClientRuntimeEnvironment runtime) : RemoteViewModel(connectivity, text)
 {
     private string identifier = string.Empty;
     private string password = string.Empty;
     private string deviceIdentifier = Guid.NewGuid().ToString("N");
     private Guid? challengeId;
     private string otpCode = string.Empty;
+    private string? otpStatusMessage;
+    private DateTime? nextOtpRequestUtc;
+    private int requestingOtp;
     public string Identifier { get => identifier; set => Set(ref identifier, value); }
     public string Password { get => password; set => Set(ref password, value); }
     public string DeviceIdentifier { get => deviceIdentifier; set => Set(ref deviceIdentifier, value); }
     public Guid? ChallengeId { get => challengeId; private set => Set(ref challengeId, value); }
     public string OtpCode { get => otpCode; set => Set(ref otpCode, value); }
+    public string? OtpStatusMessage { get => otpStatusMessage; private set { if (Set(ref otpStatusMessage, value)) Raise(nameof(HasOtpStatus)); } }
+    public bool HasOtpStatus => !string.IsNullOrWhiteSpace(OtpStatusMessage);
+    public DateTime? NextOtpRequestUtc { get => nextOtpRequestUtc; private set => Set(ref nextOtpRequestUtc, value); }
     public async Task LoginAsync()
     {
         if (string.IsNullOrWhiteSpace(Identifier) || string.IsNullOrWhiteSpace(Password)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
@@ -49,7 +55,29 @@ public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager sess
     public async Task RequestOtpAsync()
     {
         if (string.IsNullOrWhiteSpace(Identifier)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
-        await RunAsync(async () => { OtpChallengeResponse response = await auth.RequestOtpAsync(new(Identifier.Trim(), OtpPurpose.Login, DeviceIdentifier), Guid.NewGuid().ToString("N"), default); ChallengeId = response.ChallengeId; State = RemoteStateKind.Content; });
+        if (Interlocked.Exchange(ref requestingOtp, 1) != 0) return;
+        try
+        {
+            OtpStatusMessage = null;
+            await RunAsync(async () =>
+            {
+                OtpChallengeResponse response = await auth.RequestOtpAsync(new(Identifier.Trim(), OtpPurpose.Login, DeviceIdentifier), Guid.NewGuid().ToString("N"), default);
+                ChallengeId = response.ChallengeId;
+                NextOtpRequestUtc = response.NextResendUtc;
+                if (runtime.IsDevelopment && !string.IsNullOrWhiteSpace(response.DevelopmentCode))
+                {
+                    OtpCode = response.DevelopmentCode;
+                    OtpStatusMessage = Text["DevelopmentOtpGenerated"];
+                }
+                else
+                {
+                    OtpCode = string.Empty;
+                    OtpStatusMessage = Text["OtpRequested"];
+                }
+                State = RemoteStateKind.Content;
+            });
+        }
+        finally { Volatile.Write(ref requestingOtp, 0); }
     }
     public async Task VerifyOtpAsync()
     {

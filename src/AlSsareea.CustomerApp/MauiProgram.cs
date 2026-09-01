@@ -19,6 +19,11 @@ public static class MauiProgram
         });
 
         builder.Services.AddSingleton(new ApiConfiguration(ResolveBaseUri()));
+#if DEBUG
+        builder.Services.AddSingleton<IClientRuntimeEnvironment>(new ClientRuntimeEnvironment(true));
+#else
+        builder.Services.AddSingleton<IClientRuntimeEnvironment>(new ClientRuntimeEnvironment(false));
+#endif
         builder.Services.AddSingleton<ISessionStorage, SecureSessionStorage>();
         builder.Services.AddSingleton<IAuthenticationApi>(sp =>
         {

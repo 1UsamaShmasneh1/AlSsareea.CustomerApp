@@ -37,19 +37,142 @@ public sealed class CartViewModelTests
 
 public sealed class OtpViewModelTests
 {
-    [Fact] public async Task Invalid_code_maps_to_localized_validation() { LoginViewModel vm = Create(new AuthStub { VerifyStatus = 400 }); vm.Identifier = "user"; await vm.RequestOtpAsync(); vm.OtpCode = "bad"; await vm.VerifyOtpAsync(); Assert.Equal("ErrorValidation", vm.ErrorMessage); }
-    [Fact] public async Task Expired_code_maps_to_expired_message() { LoginViewModel vm = Create(new AuthStub { VerifyStatus = 410 }); vm.Identifier = "user"; await vm.RequestOtpAsync(); vm.OtpCode = "123"; await vm.VerifyOtpAsync(); Assert.Equal("ErrorOtpExpired", vm.ErrorMessage); }
-    [Fact] public async Task Throttled_request_maps_rate_limit() { LoginViewModel vm = Create(new AuthStub { RequestStatus = 429 }); vm.Identifier = "user"; await vm.RequestOtpAsync(); Assert.Equal("ErrorRateLimit", vm.ErrorMessage); }
-    [Fact] public async Task Offline_request_does_not_call_backend() { var auth = new AuthStub(); LoginViewModel vm = Create(auth, false); vm.Identifier = "user"; await vm.RequestOtpAsync(); Assert.Equal(0, auth.RequestCalls); Assert.Equal(RemoteStateKind.Offline, vm.State); }
-    private static LoginViewModel Create(AuthStub auth, bool online = true) => new(auth, new SessionStub(), new OnlineConnectivity(online), new TestText(), new TestNavigation());
+    [Fact]
+    public async Task Request_stores_challenge_and_resend_time()
+    {
+        var auth = new AuthStub();
+        LoginViewModel vm = Create(auth);
+
+        await RequestAsync(vm);
+
+        Assert.Equal(auth.ChallengeId, vm.ChallengeId);
+        Assert.Equal(auth.NextResendUtc, vm.NextOtpRequestUtc);
+    }
+
+    [Fact]
+    public async Task Development_code_populates_input_in_development()
+    {
+        var auth = new AuthStub { DevelopmentCode = "123456" };
+        LoginViewModel vm = Create(auth, development: true);
+
+        await RequestAsync(vm);
+
+        Assert.Equal("123456", vm.OtpCode);
+        Assert.Equal("DevelopmentOtpGenerated", vm.OtpStatusMessage);
+        Assert.True(vm.HasOtpStatus);
+    }
+
+    [Fact]
+    public async Task Null_development_code_leaves_input_empty()
+    {
+        LoginViewModel vm = Create(new AuthStub(), development: true);
+        vm.OtpCode = "old-code";
+
+        await RequestAsync(vm);
+
+        Assert.Empty(vm.OtpCode);
+        Assert.Equal("OtpRequested", vm.OtpStatusMessage);
+    }
+
+    [Fact]
+    public async Task Production_ignores_development_code()
+    {
+        LoginViewModel vm = Create(new AuthStub { DevelopmentCode = "123456" }, development: false);
+
+        await RequestAsync(vm);
+
+        Assert.Empty(vm.OtpCode);
+        Assert.Equal("OtpRequested", vm.OtpStatusMessage);
+    }
+
+    [Fact]
+    public async Task Request_does_not_persist_otp_or_session()
+    {
+        var session = new SessionStub();
+        LoginViewModel vm = Create(new AuthStub { DevelopmentCode = "123456" }, session: session);
+
+        await RequestAsync(vm);
+
+        Assert.Equal(0, session.SetCalls);
+    }
+
+    [Fact]
+    public async Task Request_error_maps_correctly()
+    {
+        LoginViewModel vm = Create(new AuthStub { RequestStatus = 503 });
+
+        await RequestAsync(vm);
+
+        Assert.Equal("ErrorUnavailable", vm.ErrorMessage);
+        Assert.False(vm.HasOtpStatus);
+    }
+
+    [Fact]
+    public async Task Resend_blocked_maps_specific_localized_error()
+    {
+        LoginViewModel vm = Create(new AuthStub { RequestStatus = 429, RequestCode = "auth.otp_resend_blocked" });
+
+        await RequestAsync(vm);
+
+        Assert.Equal("ErrorOtpResendBlocked", vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Verify_uses_challenge_and_device_identifier()
+    {
+        var auth = new AuthStub { DevelopmentCode = "123456" };
+        LoginViewModel vm = Create(auth);
+        vm.DeviceIdentifier = "test-device";
+        await RequestAsync(vm);
+
+        await vm.VerifyOtpAsync();
+
+        Assert.Equal(auth.ChallengeId, auth.VerifyChallengeId);
+        Assert.Equal("123456", auth.VerifyRequest!.Code);
+        Assert.Equal("test-device", auth.VerifyRequest.DeviceIdentifier);
+    }
+
+    [Fact]
+    public async Task Concurrent_request_taps_issue_one_request()
+    {
+        var auth = new AuthStub { DelayRequest = true };
+        LoginViewModel vm = Create(auth);
+        vm.Identifier = "user@example.test";
+
+        Task first = vm.RequestOtpAsync();
+        Task second = vm.RequestOtpAsync();
+        await Task.Delay(20);
+        auth.ReleaseRequest();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, auth.RequestCalls);
+    }
+
+    [Fact] public async Task Invalid_code_maps_to_localized_validation() { LoginViewModel vm = Create(new AuthStub { VerifyStatus = 400 }); await RequestAsync(vm); vm.OtpCode = "bad"; await vm.VerifyOtpAsync(); Assert.Equal("ErrorValidation", vm.ErrorMessage); }
+    [Fact] public async Task Expired_code_maps_to_expired_message() { LoginViewModel vm = Create(new AuthStub { VerifyStatus = 410 }); await RequestAsync(vm); vm.OtpCode = "123"; await vm.VerifyOtpAsync(); Assert.Equal("ErrorOtpExpired", vm.ErrorMessage); }
+    [Fact] public async Task Throttled_request_maps_rate_limit() { LoginViewModel vm = Create(new AuthStub { RequestStatus = 429 }); await RequestAsync(vm); Assert.Equal("ErrorRateLimit", vm.ErrorMessage); }
+    [Fact] public async Task Offline_request_does_not_call_backend() { var auth = new AuthStub(); LoginViewModel vm = Create(auth, online: false); await RequestAsync(vm); Assert.Equal(0, auth.RequestCalls); Assert.Equal(RemoteStateKind.Offline, vm.State); }
+
+    private static async Task RequestAsync(LoginViewModel vm) { vm.Identifier = "user@example.test"; await vm.RequestOtpAsync(); }
+    private static LoginViewModel Create(AuthStub auth, bool online = true, bool development = true, SessionStub? session = null) => new(auth, session ?? new(), new OnlineConnectivity(online), new TestText(), new TestNavigation(), new ClientRuntimeEnvironment(development));
+
     private sealed class AuthStub : IAuthenticationApi
     {
+        private readonly TaskCompletionSource requestGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int? RequestStatus { get; init; }
+        public string? RequestCode { get; init; }
         public int? VerifyStatus { get; init; }
+        public string? DevelopmentCode { get; init; }
+        public bool DelayRequest { get; init; }
         public int RequestCalls { get; private set; }
-        public Task<OtpChallengeResponse> RequestOtpAsync(OtpChallengeRequest request, string idempotencyKey, CancellationToken ct) { RequestCalls++; if (RequestStatus.HasValue) throw Problem(RequestStatus.Value); return Task.FromResult(new OtpChallengeResponse(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(5), DateTime.UtcNow, null)); }
-        public Task VerifyOtpAsync(Guid challengeId, OtpVerifyRequest request, CancellationToken ct) => VerifyStatus.HasValue ? Task.FromException(Problem(VerifyStatus.Value)) : Task.CompletedTask;
-        private static ApiException Problem(int status) => new(new(status, "Problem", null, null, new Dictionary<string, string[]>())); public Task<TokenResponse> LoginAsync(LoginRequest request, CancellationToken ct) => throw new NotSupportedException(); public Task<TokenResponse> RefreshAsync(RefreshRequest request, CancellationToken ct) => throw new NotSupportedException(); public Task LogoutAsync(string idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
+        public Guid ChallengeId { get; } = Guid.NewGuid();
+        public DateTime NextResendUtc { get; } = DateTime.UtcNow.AddMinutes(1);
+        public Guid? VerifyChallengeId { get; private set; }
+        public OtpVerifyRequest? VerifyRequest { get; private set; }
+        public async Task<OtpChallengeResponse> RequestOtpAsync(OtpChallengeRequest request, string idempotencyKey, CancellationToken ct) { RequestCalls++; if (DelayRequest) await requestGate.Task.WaitAsync(ct); if (RequestStatus.HasValue) throw Problem(RequestStatus.Value, RequestCode); return new(ChallengeId, DateTime.UtcNow.AddMinutes(5), NextResendUtc, DevelopmentCode); }
+        public Task VerifyOtpAsync(Guid challengeId, OtpVerifyRequest request, CancellationToken ct) { VerifyChallengeId = challengeId; VerifyRequest = request; return VerifyStatus.HasValue ? Task.FromException(Problem(VerifyStatus.Value)) : Task.CompletedTask; }
+        public void ReleaseRequest() => requestGate.TrySetResult();
+        private static ApiException Problem(int status, string? code = null) => new(new(status, "Problem", null, code, new Dictionary<string, string[]>())); public Task<TokenResponse> LoginAsync(LoginRequest request, CancellationToken ct) => throw new NotSupportedException(); public Task<TokenResponse> RefreshAsync(RefreshRequest request, CancellationToken ct) => throw new NotSupportedException(); public Task LogoutAsync(string idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
     }
-    private sealed class SessionStub : ISessionManager { public string? AccessToken => null; public DateTime? AccessTokenExpiresUtc => null; public Guid? UserId => null; public bool IsAuthenticated => false; public Task<bool> RestoreAsync(CancellationToken ct) => Task.FromResult(false); public Task SetAsync(TokenResponse tokens, string deviceIdentifier, CancellationToken ct) => Task.CompletedTask; public Task<bool> RefreshAsync(string? failedAccessToken, CancellationToken ct) => Task.FromResult(false); public Task ClearAsync(CancellationToken ct) => Task.CompletedTask; }
+    private sealed class SessionStub : ISessionManager { public int SetCalls { get; private set; } public string? AccessToken => null; public DateTime? AccessTokenExpiresUtc => null; public Guid? UserId => null; public bool IsAuthenticated => false; public Task<bool> RestoreAsync(CancellationToken ct) => Task.FromResult(false); public Task SetAsync(TokenResponse tokens, string deviceIdentifier, CancellationToken ct) { SetCalls++; return Task.CompletedTask; } public Task<bool> RefreshAsync(string? failedAccessToken, CancellationToken ct) => Task.FromResult(false); public Task ClearAsync(CancellationToken ct) => Task.CompletedTask; }
 }

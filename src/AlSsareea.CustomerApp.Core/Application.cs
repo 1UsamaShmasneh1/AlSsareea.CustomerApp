@@ -86,6 +86,10 @@ public interface IConnectivityService
 
 public interface IUserStateResetter { Task ResetAsync(CancellationToken ct); }
 
+public interface IClientRuntimeEnvironment { bool IsDevelopment { get; } }
+
+public sealed record ClientRuntimeEnvironment(bool IsDevelopment) : IClientRuntimeEnvironment;
+
 public sealed class UserStateResetter(IEnumerable<IUserStateResetter> resetters)
 {
     public async Task ResetAsync(CancellationToken ct)
@@ -98,6 +102,7 @@ public static class UiErrorMapper
 {
     public static string Map(Exception exception, ILocalizationService text, bool online) => exception switch
     {
+        ApiException { Problem.Code: "auth.otp_resend_blocked" } => text["ErrorOtpResendBlocked"],
         ApiException { Problem.Status: 429 } => text["ErrorRateLimit"],
         ApiException { Problem.Status: 401 } => text["ErrorUnauthorized"],
         ApiException { Problem.Status: 403 } => text["ErrorForbidden"],

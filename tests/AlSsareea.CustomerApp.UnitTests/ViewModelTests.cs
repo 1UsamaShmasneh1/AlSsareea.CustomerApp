@@ -56,7 +56,7 @@ public sealed class ViewModelTests
     [Fact]
     public async Task Login_validation_does_not_call_backend()
     {
-        var auth = new AuthStub(); var vm = new LoginViewModel(auth, new SessionStub(false), new OnlineConnectivity(), new TestText(), new TestNavigation());
+        var auth = new AuthStub(); var vm = new LoginViewModel(auth, new SessionStub(false), new OnlineConnectivity(), new TestText(), new TestNavigation(), new ClientRuntimeEnvironment(true));
         await vm.LoginAsync(); Assert.Equal(0, auth.LoginCalls); Assert.Equal("ErrorValidation", vm.ErrorMessage);
     }
 

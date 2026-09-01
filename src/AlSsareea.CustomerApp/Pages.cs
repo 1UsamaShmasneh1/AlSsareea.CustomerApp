@@ -45,7 +45,9 @@ public sealed class LoginPage : RemotePage<LoginViewModel>
     public LoginPage() : base("Login")
     {
         var identifier = new Entry { Placeholder = T("EmailOrPhone"), MinimumHeightRequest = 48 }; identifier.SetBinding(Entry.TextProperty, nameof(LoginViewModel.Identifier)); var password = new Entry { Placeholder = T("Password"), IsPassword = true, MinimumHeightRequest = 48 }; password.SetBinding(Entry.TextProperty, nameof(LoginViewModel.Password)); var otp = new Entry { Placeholder = T("OtpCode"), Keyboard = Keyboard.Numeric, MinimumHeightRequest = 48 }; otp.SetBinding(Entry.TextProperty, nameof(LoginViewModel.OtpCode));
-        var layout = new VerticalStackLayout { Padding = 24, Spacing = 14, Children = { new Label { Text = T("WelcomeBack"), FontSize = 30, FontAttributes = FontAttributes.Bold }, identifier, password, Action(T("Login"), ViewModel.LoginAsync), Action(T("RequestOtp"), ViewModel.RequestOtpAsync), otp, Action(T("VerifyOtp"), ViewModel.VerifyOtpAsync) } }; AddState(layout); Content = new ScrollView { Content = layout };
+        var requestOtp = new Button { Text = T("RequestOtp"), MinimumHeightRequest = 48 }; requestOtp.Clicked += async (_, _) => { requestOtp.IsEnabled = false; try { await ViewModel.RequestOtpAsync(); } finally { requestOtp.IsEnabled = true; } };
+        var otpStatus = new Label { TextColor = Colors.ForestGreen }; otpStatus.SetBinding(Label.TextProperty, nameof(LoginViewModel.OtpStatusMessage)); otpStatus.SetBinding(IsVisibleProperty, nameof(LoginViewModel.HasOtpStatus));
+        var layout = new VerticalStackLayout { Padding = 24, Spacing = 14, Children = { new Label { Text = T("WelcomeBack"), FontSize = 30, FontAttributes = FontAttributes.Bold }, identifier, password, Action(T("Login"), ViewModel.LoginAsync), requestOtp, otpStatus, otp, Action(T("VerifyOtp"), ViewModel.VerifyOtpAsync) } }; AddState(layout); Content = new ScrollView { Content = layout };
     }
 }
 

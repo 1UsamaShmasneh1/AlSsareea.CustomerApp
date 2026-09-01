@@ -40,7 +40,7 @@ public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager sess
         if (string.IsNullOrWhiteSpace(Identifier) || string.IsNullOrWhiteSpace(Password)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
         await RunAsync(async () =>
         {
-            TokenResponse tokens = await auth.LoginAsync(new(Identifier.Trim(), Password, new(DeviceIdentifier, "Customer app", CurrentPlatform(), null, null)), default);
+            TokenResponse tokens = await auth.LoginAsync(new(Identifier.Trim(), Password, new(DeviceIdentifier, "Customer app", DevicePlatformDetector.Current(), null, null)), default);
             await session.SetAsync(tokens, DeviceIdentifier, default);
             State = RemoteStateKind.Content;
             await navigation.GoToAsync(AppRoutes.Home);
@@ -56,7 +56,6 @@ public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager sess
         if (!ChallengeId.HasValue || string.IsNullOrWhiteSpace(OtpCode)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
         await RunAsync(async () => { await auth.VerifyOtpAsync(ChallengeId.Value, new(OtpCode.Trim(), DeviceIdentifier), default); State = RemoteStateKind.Content; });
     }
-    private static DevicePlatform CurrentPlatform() => OperatingSystem.IsAndroid() ? DevicePlatform.Android : OperatingSystem.IsIOS() ? DevicePlatform.Ios : DevicePlatform.Web;
 }
 
 public sealed class MerchantDiscoveryViewModel(IMerchantApi merchants, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation) : RemoteViewModel(connectivity, text)

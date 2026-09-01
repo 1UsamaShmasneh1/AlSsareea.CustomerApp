@@ -1,9 +1,18 @@
-using System.Text.Json.Serialization;
-
 namespace AlSsareea.CustomerApp.Core;
 
-[JsonConverter(typeof(JsonStringEnumConverter<DevicePlatform>))]
-public enum DevicePlatform { Unknown, Web, Android, Ios }
+// Numeric values are part of the Backend Identity wire contract. Do not reorder or stringify them.
+public enum DevicePlatform : short { Android = 1, Ios = 2, Web = 3, Windows = 4, MacOs = 5, Linux = 6 }
+
+public static class DevicePlatformDetector
+{
+    public static DevicePlatform Current() =>
+        OperatingSystem.IsAndroid() ? DevicePlatform.Android :
+        OperatingSystem.IsIOS() ? DevicePlatform.Ios :
+        OperatingSystem.IsMacCatalyst() || OperatingSystem.IsMacOS() ? DevicePlatform.MacOs :
+        OperatingSystem.IsWindows() ? DevicePlatform.Windows :
+        OperatingSystem.IsLinux() ? DevicePlatform.Linux :
+        throw new PlatformNotSupportedException("The current operating system has no Backend device-platform contract value.");
+}
 public enum OtpPurpose : short { Login = 1, PasswordReset, PhoneVerification, EmailVerification }
 
 public sealed record LoginDeviceRequest(string DeviceIdentifier, string? DeviceName, DevicePlatform Platform, string? AppVersion, string? OperatingSystemVersion);

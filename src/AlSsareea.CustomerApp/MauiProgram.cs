@@ -31,6 +31,10 @@ public static class MauiProgram
             return new AuthenticationApi(new ApiClient(http));
         });
         builder.Services.AddSingleton<ISessionManager, SessionManager>();
+        builder.Services.AddSingleton(new GoogleClientConfiguration(
+            Environment.GetEnvironmentVariable("ALSSAREEA_GOOGLE_CLIENT_ID"),
+            Uri.TryCreate(Environment.GetEnvironmentVariable("ALSSAREEA_GOOGLE_REDIRECT_URI") ?? "alssareea://oauth2redirect", UriKind.Absolute, out Uri? googleRedirect) ? googleRedirect : null));
+        builder.Services.AddSingleton<IGoogleAuthenticationService, GoogleAuthenticationService>();
         builder.Services.AddSingleton(sp =>
         {
             var authentication = new AuthenticatedHandler(sp.GetRequiredService<ISessionManager>()) { InnerHandler = new HttpClientHandler() };
@@ -39,6 +43,7 @@ public static class MauiProgram
         });
 
         builder.Services.AddSingleton<ICustomerApi, CustomerApi>();
+        builder.Services.AddSingleton<ICustomerProfileBootstrapper, CustomerProfileBootstrapper>();
         builder.Services.AddSingleton<IMerchantApi, MerchantApi>();
         builder.Services.AddSingleton<ICatalogApi, CatalogApi>();
         builder.Services.AddSingleton<ICartApi, CartApi>();
@@ -69,6 +74,9 @@ public static class MauiProgram
         builder.Services.AddTransient<SplashViewModel>();
         builder.Services.AddTransient<OnboardingViewModel>();
         builder.Services.AddTransient<LoginViewModel>();
+        builder.Services.AddTransient<RegisterChoiceViewModel>();
+        builder.Services.AddTransient<RegisterEmailViewModel>();
+        builder.Services.AddTransient<CompleteProfileViewModel>();
         builder.Services.AddTransient<MerchantDiscoveryViewModel>();
         builder.Services.AddTransient<MerchantDetailsViewModel>();
         builder.Services.AddTransient<CatalogViewModel>();

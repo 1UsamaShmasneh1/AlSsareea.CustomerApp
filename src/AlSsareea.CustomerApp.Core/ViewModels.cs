@@ -1,13 +1,20 @@
 namespace AlSsareea.CustomerApp.Core;
 
-public sealed class SplashViewModel(IPreferencesStore preferences, ILocalizationService text, ISessionManager session, INavigationService navigation) : ObservableObject
+public sealed class SplashViewModel(IPreferencesStore preferences, ILocalizationService text, ISessionManager session, INavigationService navigation, ICustomerProfileBootstrapper? profiles = null) : ObservableObject
 {
     public async Task StartAsync(CancellationToken ct)
     {
         text.Apply(preferences.Language);
         if (!preferences.OnboardingCompleted) { await navigation.GoToAsync(AppRoutes.Onboarding); return; }
         bool restored = await session.RestoreAsync(ct);
-        await navigation.GoToAsync(restored ? AppRoutes.Home : AppRoutes.Login);
+        if (!restored) { await navigation.GoToAsync(AppRoutes.Login); return; }
+        if (profiles is null) { await navigation.GoToAsync(AppRoutes.Home); return; }
+        try
+        {
+            CustomerProfileBootstrapResult profile = await profiles.EnsureAsync(null, ct);
+            await navigation.GoToAsync(profile.IsComplete ? AppRoutes.Home : AppRoutes.CompleteProfile);
+        }
+        catch { await navigation.GoToAsync(AppRoutes.CompleteProfile); }
     }
 }
 
@@ -23,7 +30,7 @@ public sealed class OnboardingViewModel(IPreferencesStore preferences, ILocaliza
     }
 }
 
-public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager session, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation, IClientRuntimeEnvironment runtime) : RemoteViewModel(connectivity, text)
+public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager session, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation, IClientRuntimeEnvironment runtime, IGoogleAuthenticationService? google = null, ICustomerProfileBootstrapper? profiles = null) : RemoteViewModel(connectivity, text)
 {
     private string identifier = string.Empty;
     private string password = string.Empty;
@@ -47,9 +54,23 @@ public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager sess
         await RunAsync(async () =>
         {
             TokenResponse tokens = await auth.LoginAsync(new(Identifier.Trim(), Password, new(DeviceIdentifier, "Customer app", DevicePlatformDetector.Current(), null, null)), default);
-            await session.SetAsync(tokens, DeviceIdentifier, default);
             State = RemoteStateKind.Content;
-            await navigation.GoToAsync(AppRoutes.Home);
+            if (profiles is null) { await session.SetAsync(tokens, DeviceIdentifier, default); await navigation.GoToAsync(AppRoutes.Home); }
+            else await AuthenticationFlow.RouteAfterAuthenticationAsync(tokens, DeviceIdentifier, null, session, profiles, navigation, default);
+        });
+    }
+    public Task RegisterAsync() => navigation.GoToAsync(AppRoutes.RegisterChoice);
+    public async Task GoogleAsync()
+    {
+        if (google is null || profiles is null) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnavailable"]; return; }
+        await RunAsync(async () =>
+        {
+            GoogleSignInResult signIn = await google.SignInAsync(default);
+            if (signIn.Status == GoogleSignInStatus.Cancelled) { State = RemoteStateKind.Content; return; }
+            if (signIn.Status is GoogleSignInStatus.NotConfigured or GoogleSignInStatus.Unsupported) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnavailable"]; return; }
+            if (signIn.Status != GoogleSignInStatus.Succeeded || string.IsNullOrWhiteSpace(signIn.IdToken)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleInvalid"]; return; }
+            GoogleAuthenticationResponse response = await auth.AuthenticateWithGoogleAsync(new(signIn.IdToken, signIn.Nonce, AuthenticationFlow.Device(DeviceIdentifier)), default);
+            await AuthenticationFlow.RouteAfterAuthenticationAsync(response.Tokens, DeviceIdentifier, new(response.GivenName, response.FamilyName), session, profiles, navigation, default);
         });
     }
     public async Task RequestOtpAsync()
@@ -83,6 +104,75 @@ public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager sess
     {
         if (!ChallengeId.HasValue || string.IsNullOrWhiteSpace(OtpCode)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
         await RunAsync(async () => { await auth.VerifyOtpAsync(ChallengeId.Value, new(OtpCode.Trim(), DeviceIdentifier), default); State = RemoteStateKind.Content; });
+    }
+}
+
+public sealed class RegisterChoiceViewModel(IAuthenticationApi auth, ISessionManager session, IGoogleAuthenticationService google, ICustomerProfileBootstrapper profiles, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation) : RemoteViewModel(connectivity, text)
+{
+    private readonly string deviceIdentifier = Guid.NewGuid().ToString("N");
+    public Task RegisterWithEmailAsync() => navigation.GoToAsync(AppRoutes.RegisterEmail);
+    public Task BackToLoginAsync() => navigation.GoToAsync(AppRoutes.Login);
+    public async Task ContinueWithGoogleAsync()
+    {
+        await RunAsync(async () =>
+        {
+            GoogleSignInResult signIn = await google.SignInAsync(default);
+            if (signIn.Status == GoogleSignInStatus.Cancelled) { State = RemoteStateKind.Content; return; }
+            if (signIn.Status is GoogleSignInStatus.NotConfigured or GoogleSignInStatus.Unsupported) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnavailable"]; return; }
+            if (signIn.Status != GoogleSignInStatus.Succeeded || string.IsNullOrWhiteSpace(signIn.IdToken)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleInvalid"]; return; }
+            GoogleAuthenticationResponse response = await auth.AuthenticateWithGoogleAsync(new(signIn.IdToken, signIn.Nonce, AuthenticationFlow.Device(deviceIdentifier)), default);
+            await AuthenticationFlow.RouteAfterAuthenticationAsync(response.Tokens, deviceIdentifier, new(response.GivenName, response.FamilyName), session, profiles, navigation, default);
+        });
+    }
+}
+
+public sealed class RegisterEmailViewModel(IAuthenticationApi auth, ISessionManager session, ICustomerProfileBootstrapper profiles, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation) : RemoteViewModel(connectivity, text)
+{
+    private readonly IdempotentSubmission submission = new();
+    private readonly string deviceIdentifier = Guid.NewGuid().ToString("N");
+    private int registering;
+    private string email = string.Empty; private string password = string.Empty; private string confirmPassword = string.Empty; private string firstName = string.Empty; private string lastName = string.Empty; private DateOnly? dateOfBirth;
+    public string Email { get => email; set => Set(ref email, value); }
+    public string Password { get => password; set => Set(ref password, value); }
+    public string ConfirmPassword { get => confirmPassword; set => Set(ref confirmPassword, value); }
+    public string FirstName { get => firstName; set => Set(ref firstName, value); }
+    public string LastName { get => lastName; set => Set(ref lastName, value); }
+    public DateOnly? DateOfBirth { get => dateOfBirth; set => Set(ref dateOfBirth, value); }
+    public Task BackToLoginAsync() => navigation.GoToAsync(AppRoutes.Login);
+    public async Task RegisterAsync()
+    {
+        string normalizedEmail = Email.Trim();
+        if (!System.Net.Mail.MailAddress.TryCreate(normalizedEmail, out System.Net.Mail.MailAddress? parsedEmail) || !string.Equals(parsedEmail.Address, normalizedEmail, StringComparison.OrdinalIgnoreCase) || Password.Length < 10 || Password != ConfirmPassword || string.IsNullOrWhiteSpace(FirstName) || string.IsNullOrWhiteSpace(LastName)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
+        if (Interlocked.Exchange(ref registering, 1) != 0) return;
+        try
+        {
+            await RunAsync(async () =>
+            {
+                TokenResponse tokens = await auth.RegisterCustomerAsync(new(normalizedEmail, Password, AuthenticationFlow.Device(deviceIdentifier)), submission.CurrentKey, default);
+                submission.Complete();
+                await AuthenticationFlow.RouteAfterAuthenticationAsync(tokens, deviceIdentifier, new(FirstName, LastName, DateOfBirth), session, profiles, navigation, default);
+            });
+        }
+        finally { Volatile.Write(ref registering, 0); }
+    }
+}
+
+public sealed class CompleteProfileViewModel(ICustomerProfileBootstrapper profiles, IConnectivityService connectivity, ILocalizationService text, INavigationService navigation) : RemoteViewModel(connectivity, text)
+{
+    private string firstName = string.Empty; private string lastName = string.Empty; private DateOnly? dateOfBirth;
+    public string FirstName { get => firstName; set => Set(ref firstName, value); }
+    public string LastName { get => lastName; set => Set(ref lastName, value); }
+    public DateOnly? DateOfBirth { get => dateOfBirth; set => Set(ref dateOfBirth, value); }
+    public void ApplyHints(string? first, string? last) { if (!string.IsNullOrWhiteSpace(first)) FirstName = first; if (!string.IsNullOrWhiteSpace(last)) LastName = last; }
+    public async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FirstName) || string.IsNullOrWhiteSpace(LastName)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorValidation"]; return; }
+        await RunAsync(async () =>
+        {
+            CustomerProfileBootstrapResult result = await profiles.EnsureAsync(new(FirstName, LastName, DateOfBirth), default);
+            if (!result.IsComplete) throw new InvalidOperationException("Customer profile was not completed.");
+            State = RemoteStateKind.Content; await navigation.GoToAsync(AppRoutes.Home);
+        });
     }
 }
 

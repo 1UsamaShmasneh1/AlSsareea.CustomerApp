@@ -2,7 +2,20 @@ namespace AlSsareea.CustomerApp.Core;
 
 public sealed record StoredSession(string RefreshToken, DateTime RefreshTokenExpiresUtc, string DeviceIdentifier);
 public interface ISessionStorage { Task<StoredSession?> GetAsync(CancellationToken ct); Task SetAsync(StoredSession session, CancellationToken ct); Task ClearAsync(CancellationToken ct); }
-public interface IAuthenticationApi { Task<TokenResponse> LoginAsync(LoginRequest request, CancellationToken ct); Task<TokenResponse> RefreshAsync(RefreshRequest request, CancellationToken ct); Task LogoutAsync(string idempotencyKey, CancellationToken ct); Task<OtpChallengeResponse> RequestOtpAsync(OtpChallengeRequest request, string idempotencyKey, CancellationToken ct); Task VerifyOtpAsync(Guid challengeId, OtpVerifyRequest request, CancellationToken ct); }
+public interface IAuthenticationApi
+{
+    Task<TokenResponse> LoginAsync(LoginRequest request, CancellationToken ct);
+    Task<TokenResponse> RefreshAsync(RefreshRequest request, CancellationToken ct);
+    Task LogoutAsync(string idempotencyKey, CancellationToken ct);
+    Task<OtpChallengeResponse> RequestOtpAsync(OtpChallengeRequest request, string idempotencyKey, CancellationToken ct);
+    Task VerifyOtpAsync(Guid challengeId, OtpVerifyRequest request, CancellationToken ct);
+    Task<TokenResponse> RegisterCustomerAsync(RegisterCustomerRequest request, string idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
+    Task<GoogleAuthenticationResponse> AuthenticateWithGoogleAsync(GoogleAuthenticationRequest request, CancellationToken ct) => throw new NotSupportedException();
+}
+
+public enum GoogleSignInStatus { Succeeded, Cancelled, NotConfigured, Unsupported, Failed }
+public sealed record GoogleSignInResult(GoogleSignInStatus Status, string? IdToken = null, string? Nonce = null);
+public interface IGoogleAuthenticationService { Task<GoogleSignInResult> SignInAsync(CancellationToken ct); }
 
 public interface ISessionManager { string? AccessToken { get; } DateTime? AccessTokenExpiresUtc { get; } Guid? UserId { get; } bool IsAuthenticated { get; } Task SetAsync(TokenResponse tokens, string deviceIdentifier, CancellationToken ct); Task<bool> RestoreAsync(CancellationToken ct); Task<bool> RefreshAsync(string? failedAccessToken, CancellationToken ct); Task ClearAsync(CancellationToken ct); }
 

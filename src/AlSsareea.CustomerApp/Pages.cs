@@ -44,11 +44,50 @@ public sealed class LoginPage : RemotePage<LoginViewModel>
 {
     public LoginPage() : base("Login")
     {
-        var identifier = new Entry { Placeholder = T("EmailOrPhone"), MinimumHeightRequest = 48 }; identifier.SetBinding(Entry.TextProperty, nameof(LoginViewModel.Identifier)); var password = new Entry { Placeholder = T("Password"), IsPassword = true, MinimumHeightRequest = 48 }; password.SetBinding(Entry.TextProperty, nameof(LoginViewModel.Password)); var otp = new Entry { Placeholder = T("OtpCode"), Keyboard = Keyboard.Numeric, MinimumHeightRequest = 48 }; otp.SetBinding(Entry.TextProperty, nameof(LoginViewModel.OtpCode));
-        var requestOtp = new Button { Text = T("RequestOtp"), MinimumHeightRequest = 48 }; requestOtp.Clicked += async (_, _) => { requestOtp.IsEnabled = false; try { await ViewModel.RequestOtpAsync(); } finally { requestOtp.IsEnabled = true; } };
-        var otpStatus = new Label { TextColor = Colors.ForestGreen }; otpStatus.SetBinding(Label.TextProperty, nameof(LoginViewModel.OtpStatusMessage)); otpStatus.SetBinding(IsVisibleProperty, nameof(LoginViewModel.HasOtpStatus));
-        var layout = new VerticalStackLayout { Padding = 24, Spacing = 14, Children = { new Label { Text = T("WelcomeBack"), FontSize = 30, FontAttributes = FontAttributes.Bold }, identifier, password, Action(T("Login"), ViewModel.LoginAsync), requestOtp, otpStatus, otp, Action(T("VerifyOtp"), ViewModel.VerifyOtpAsync) } }; AddState(layout); Content = new ScrollView { Content = layout };
+        var identifier = new Entry { Placeholder = T("Email"), MinimumHeightRequest = 48, Keyboard = Keyboard.Email }; identifier.SetBinding(Entry.TextProperty, nameof(LoginViewModel.Identifier));
+        var password = new Entry { Placeholder = T("Password"), IsPassword = true, MinimumHeightRequest = 48 }; password.SetBinding(Entry.TextProperty, nameof(LoginViewModel.Password));
+        var layout = new VerticalStackLayout { Padding = 24, Spacing = 14, Children = { new Label { Text = T("WelcomeBack"), FontSize = 30, FontAttributes = FontAttributes.Bold }, identifier, password, Action(T("Login"), ViewModel.LoginAsync), Action(T("ContinueWithGoogle"), ViewModel.GoogleAsync), Action(T("RegisterNewCustomer"), ViewModel.RegisterAsync) } }; AddState(layout); Content = new ScrollView { Content = layout };
     }
+}
+
+public sealed class RegisterChoicePage : RemotePage<RegisterChoiceViewModel>
+{
+    public RegisterChoicePage() : base("CreateAccount")
+    {
+        var layout = new VerticalStackLayout { Padding = 24, Spacing = 14, Children = { new Label { Text = T("CreateAccount"), FontSize = 30, FontAttributes = FontAttributes.Bold }, Action(T("ContinueWithGoogle"), ViewModel.ContinueWithGoogleAsync), Action(T("RegisterWithEmail"), ViewModel.RegisterWithEmailAsync), Action(T("BackToLogin"), ViewModel.BackToLoginAsync) } };
+        AddState(layout); Content = layout;
+    }
+}
+
+public sealed class RegisterEmailPage : RemotePage<RegisterEmailViewModel>
+{
+    public RegisterEmailPage() : base("RegisterWithEmail")
+    {
+        var email = Entry("Email", nameof(RegisterEmailViewModel.Email), Keyboard.Email);
+        var password = Entry("Password", nameof(RegisterEmailViewModel.Password), password: true);
+        var confirm = Entry("ConfirmPassword", nameof(RegisterEmailViewModel.ConfirmPassword), password: true);
+        var first = Entry("FirstName", nameof(RegisterEmailViewModel.FirstName));
+        var last = Entry("LastName", nameof(RegisterEmailViewModel.LastName));
+        var date = new DatePicker { MinimumHeightRequest = 48, MaximumDate = DateTime.Today, Date = DateTime.Today.AddYears(-18) };
+        date.DateSelected += (_, args) => ViewModel.DateOfBirth = args.NewDate.HasValue ? DateOnly.FromDateTime(args.NewDate.Value) : null;
+        var layout = new VerticalStackLayout { Padding = 24, Spacing = 12, Children = { email, password, confirm, first, last, new Label { Text = T("DateOfBirthOptional") }, date, Action(T("CreateAccount"), ViewModel.RegisterAsync), new Label { Text = T("AlreadyHaveAccount") }, Action(T("SignIn"), ViewModel.BackToLoginAsync) } };
+        AddState(layout); Content = new ScrollView { Content = layout };
+    }
+    private Entry Entry(string key, string property, Keyboard? keyboard = null, bool password = false) { var entry = new Entry { Placeholder = T(key), IsPassword = password, Keyboard = keyboard ?? Keyboard.Default, MinimumHeightRequest = 48 }; entry.SetBinding(Microsoft.Maui.Controls.Entry.TextProperty, property); return entry; }
+}
+
+public sealed class CompleteProfilePage : RemotePage<CompleteProfileViewModel>, IQueryAttributable
+{
+    public CompleteProfilePage() : base("CompleteProfile")
+    {
+        var first = Entry("FirstName", nameof(CompleteProfileViewModel.FirstName)); var last = Entry("LastName", nameof(CompleteProfileViewModel.LastName));
+        var date = new DatePicker { MinimumHeightRequest = 48, MaximumDate = DateTime.Today, Date = DateTime.Today.AddYears(-18) };
+        date.DateSelected += (_, args) => ViewModel.DateOfBirth = args.NewDate.HasValue ? DateOnly.FromDateTime(args.NewDate.Value) : null;
+        var layout = new VerticalStackLayout { Padding = 24, Spacing = 12, Children = { new Label { Text = T("CompleteProfileBody") }, first, last, new Label { Text = T("DateOfBirthOptional") }, date, Action(T("Continue"), ViewModel.SaveAsync) } };
+        AddState(layout); Content = new ScrollView { Content = layout };
+    }
+    public void ApplyQueryAttributes(IDictionary<string, object> query) => ViewModel.ApplyHints(query.TryGetValue("firstName", out object? first) ? first?.ToString() : null, query.TryGetValue("lastName", out object? last) ? last?.ToString() : null);
+    private Entry Entry(string key, string property) { var entry = new Entry { Placeholder = T(key), MinimumHeightRequest = 48 }; entry.SetBinding(Microsoft.Maui.Controls.Entry.TextProperty, property); return entry; }
 }
 
 public class MainPage : MerchantListPage { public MainPage() : base("Home") { } }

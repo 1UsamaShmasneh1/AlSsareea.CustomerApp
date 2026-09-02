@@ -79,6 +79,16 @@ public sealed class AuthenticationContractTests
         Assert.Equal("ErrorUnauthorized", UiErrorMapper.Map(exception, new TestText(), true));
     }
 
+    [Fact]
+    public void Registration_and_google_payloads_match_backend_contract()
+    {
+        var device = new LoginDeviceRequest("synthetic-device", "Customer app", DevicePlatform.Android, null, null);
+        using JsonDocument registration = JsonDocument.Parse(JsonSerializer.Serialize(new RegisterCustomerRequest("customer@example.test", "synthetic-password", device), ApiJson.Options));
+        Assert.Equal("customer@example.test", registration.RootElement.GetProperty("email").GetString()); Assert.Equal(1, registration.RootElement.GetProperty("device").GetProperty("platform").GetInt32());
+        using JsonDocument google = JsonDocument.Parse(JsonSerializer.Serialize(new GoogleAuthenticationRequest("synthetic-id-token", "synthetic-nonce", device), ApiJson.Options));
+        Assert.Equal("synthetic-id-token", google.RootElement.GetProperty("idToken").GetString()); Assert.Equal("synthetic-nonce", google.RootElement.GetProperty("nonce").GetString());
+    }
+
     private sealed record BackendLoginRequest(string Identifier, string Password, BackendLoginDeviceRequest Device);
     private sealed record BackendLoginDeviceRequest(string DeviceIdentifier, string? DeviceName, BackendDevicePlatform Platform, string? AppVersion, string? OperatingSystemVersion);
     private enum BackendDevicePlatform : short { Android = 1, Ios = 2, Web = 3, Windows = 4, MacOs = 5, Linux = 6 }

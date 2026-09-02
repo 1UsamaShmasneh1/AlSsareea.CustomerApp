@@ -30,5 +30,12 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array><string>alssareea</string></array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -5,11 +5,12 @@ All paths were inspected against the Phase 18A backend source. JSON is camelCase
 | Area | Method and path | Client behavior |
 |---|---|---|
 | Auth | `POST /api/v1/auth/login` | Password login and rotating token response |
+| Auth | `POST /api/v1/auth/register/customer` | Anonymous Customer-only email registration; idempotency-keyed token response |
+| Auth | `POST /api/v1/auth/external/google` | Backend-validated Google ID token; new or linked Customer token response |
 | Auth | `POST /api/v1/auth/refresh` | Secure refresh restoration; never generic-retried |
 | Auth | `POST /api/v1/auth/logout` | Authenticated, idempotency-keyed logout |
-| OTP | `POST /api/v1/auth/otp/challenges` | Purpose=Login, stable challenge request key |
-| OTP | `POST /api/v1/auth/otp/challenges/{id}/verify` | Exact challenge verification contract |
-| Customer | `GET/PUT /api/v1/customers/me/` | Profile read/update |
+| Customer | `POST /api/v1/customers/me` | Create the authenticated customer's profile after Identity authentication |
+| Customer | `GET/PUT /api/v1/customers/me` | Profile read/update and registration bootstrap probe |
 | Addresses | `GET/POST /api/v1/customers/me/addresses` | Owned address list/add |
 | Addresses | `PUT/DELETE /api/v1/customers/me/addresses/{id}` | Concurrency-aware edit/delete |
 | Addresses | `PUT /api/v1/customers/me/addresses/{id}/default` | Set default |
@@ -32,3 +33,7 @@ All paths were inspected against the Phase 18A backend source. JSON is camelCase
 ## Product configuration boundary
 
 The customer details response supplies only public product media URLs and customer-safe configuration fields. CustomerApp maps `variant.id`, `optionGroup.id`, and `option.id` directly to the existing Cart request and sends the selected IDs to the existing price endpoint. It never derives IDs from labels, reads Media persistence, or treats the locally displayed adjustment sum as authoritative.
+
+## Registration boundary
+
+Identity registration owns email/password, device, session, and tokens. Customers owns first name, last name, optional date of birth, addresses, and preferences. After either email registration or Google authentication the app stores the token response first, probes `GET /api/v1/customers/me`, creates the missing profile when hints are available, and re-reads after a create conflict. A transient profile failure retains the authenticated session and routes to profile completion. The public request has no user-type field.

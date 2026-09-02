@@ -17,14 +17,18 @@ public enum OtpPurpose : short { Login = 1, PasswordReset, PhoneVerification, Em
 
 public sealed record LoginDeviceRequest(string DeviceIdentifier, string? DeviceName, DevicePlatform Platform, string? AppVersion, string? OperatingSystemVersion);
 public sealed record LoginRequest(string Identifier, string Password, LoginDeviceRequest Device);
+public sealed record RegisterCustomerRequest(string Email, string Password, LoginDeviceRequest Device);
+public sealed record GoogleAuthenticationRequest(string IdToken, string? Nonce, LoginDeviceRequest Device);
 public sealed record RefreshRequest(string RefreshToken, string DeviceIdentifier);
 public sealed record OtpChallengeRequest(string Destination, OtpPurpose Purpose, string DeviceIdentifier);
 public sealed record OtpVerifyRequest(string Code, string DeviceIdentifier);
 public sealed record AuthenticatedUserResponse(Guid Id, string UserType);
 public sealed record TokenResponse(string TokenType, string AccessToken, int ExpiresIn, string RefreshToken, DateTime RefreshTokenExpiresUtc, Guid SessionId, AuthenticatedUserResponse User);
+public sealed record GoogleAuthenticationResponse(TokenResponse Tokens, bool IsNewUser, string Email, string? GivenName, string? FamilyName);
 public sealed record OtpChallengeResponse(Guid ChallengeId, DateTime ExpiresUtc, DateTime NextResendUtc, string? DevelopmentCode);
 
 public sealed record CustomerResponse(Guid Id, string FirstName, string LastName, string DisplayName, DateOnly? DateOfBirth, short Status, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, Guid ConcurrencyStamp);
+public sealed record CreateCustomerRequest(string FirstName, string LastName, DateOnly? DateOfBirth);
 public sealed record AddressRequest(string Label, short AddressType, string City, string? Area, string Street, string? BuildingNumber, string? Floor, string? Apartment, string? PostalCode, string? PlaceId, double? Latitude, double? Longitude, string? DeliveryInstructions, bool IsDefault, Guid? ConcurrencyStamp);
 public sealed record AddressResponse(Guid Id, string Label, short AddressType, string City, string? Area, string Street, string? BuildingNumber, string? Floor, string? Apartment, string? PostalCode, string? PlaceId, double? Latitude, double? Longitude, string? DeliveryInstructions, bool IsDefault, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, Guid ConcurrencyStamp);
 public sealed record UpdateCustomerRequest(string FirstName, string LastName, DateOnly? DateOfBirth, Guid ConcurrencyStamp);

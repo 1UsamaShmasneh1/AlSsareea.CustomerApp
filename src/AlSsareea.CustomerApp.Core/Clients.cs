@@ -3,6 +3,8 @@ namespace AlSsareea.CustomerApp.Core;
 public sealed class AuthenticationApi(ApiClient api) : IAuthenticationApi
 {
     public Task<TokenResponse> LoginAsync(LoginRequest request, CancellationToken ct) => api.SendAsync<TokenResponse>(HttpMethod.Post, "api/v1/auth/login", request, ct);
+    public Task<TokenResponse> RegisterCustomerAsync(RegisterCustomerRequest request, string idempotencyKey, CancellationToken ct) => api.SendAsync<TokenResponse>(HttpMethod.Post, "api/v1/auth/register/customer", request, ct, idempotencyKey);
+    public Task<GoogleAuthenticationResponse> AuthenticateWithGoogleAsync(GoogleAuthenticationRequest request, CancellationToken ct) => api.SendAsync<GoogleAuthenticationResponse>(HttpMethod.Post, "api/v1/auth/external/google", request, ct);
     public Task<TokenResponse> RefreshAsync(RefreshRequest request, CancellationToken ct) => api.SendAsync<TokenResponse>(HttpMethod.Post, "api/v1/auth/refresh", request, ct);
     public Task LogoutAsync(string idempotencyKey, CancellationToken ct) => api.SendAsync(HttpMethod.Post, "api/v1/auth/logout", null, ct, idempotencyKey);
     public Task<OtpChallengeResponse> RequestOtpAsync(OtpChallengeRequest request, string idempotencyKey, CancellationToken ct) => api.SendAsync<OtpChallengeResponse>(HttpMethod.Post, "api/v1/auth/otp/challenges", request, ct, idempotencyKey);
@@ -18,6 +20,7 @@ public sealed class AccountSessionApi(ApiClient api) : IAccountSessionApi
 public interface ICustomerApi
 {
     Task<CustomerResponse> GetAsync(CancellationToken ct);
+    Task<CustomerResponse> CreateAsync(CreateCustomerRequest request, CancellationToken ct) => throw new NotSupportedException();
     Task<CustomerResponse> UpdateAsync(UpdateCustomerRequest request, CancellationToken ct);
     Task<IReadOnlyList<AddressResponse>> AddressesAsync(CancellationToken ct);
     Task<AddressResponse> AddAddressAsync(AddressRequest request, CancellationToken ct);
@@ -31,6 +34,7 @@ public interface ICustomerApi
 public sealed class CustomerApi(ApiClient api) : ICustomerApi
 {
     public Task<CustomerResponse> GetAsync(CancellationToken ct) => api.SendAsync<CustomerResponse>(HttpMethod.Get, "api/v1/customers/me/", null, ct);
+    public Task<CustomerResponse> CreateAsync(CreateCustomerRequest request, CancellationToken ct) => api.SendAsync<CustomerResponse>(HttpMethod.Post, "api/v1/customers/me/", request, ct);
     public Task<CustomerResponse> UpdateAsync(UpdateCustomerRequest request, CancellationToken ct) => api.SendAsync<CustomerResponse>(HttpMethod.Put, "api/v1/customers/me/", request, ct);
     public Task<IReadOnlyList<AddressResponse>> AddressesAsync(CancellationToken ct) => api.SendAsync<IReadOnlyList<AddressResponse>>(HttpMethod.Get, "api/v1/customers/me/addresses", null, ct);
     public Task<AddressResponse> AddAddressAsync(AddressRequest request, CancellationToken ct) => api.SendAsync<AddressResponse>(HttpMethod.Post, "api/v1/customers/me/addresses", request, ct);

@@ -10,7 +10,7 @@ The dependency flow is Page → ViewModel → typed API interface → `ApiClient
 
 ## Screen map
 
-Splash → onboarding or session restoration → login → five-tab Shell (Home, Search, Cart, Orders, Profile). Detail routes cover merchant details, catalog, product, addresses, checkout, order details, tracking, notifications, and legal information. Route names and deep-link parsing are centralized in Core.
+Splash → onboarding or session restoration → login/registration → customer-profile bootstrap → five-tab Shell (Home, Search, Cart, Orders, Profile). Registration supports email/password and Google through one reusable flow. Detail routes cover merchant details, catalog, product, addresses, checkout, order details, tracking, notifications, and legal information. Route names and deep-link parsing are centralized in Core.
 
 ## Local setup
 
@@ -23,7 +23,7 @@ Install SDK 10.0.400 and the `android`, `ios`, `maccatalyst`, and `maui-windows`
 3. Open `AlSsareea.CustomerApp.slnx`, set `AlSsareea.CustomerApp` as the startup project, select `Windows Machine`, and press F5.
 4. For Android, install the emulator component and a compatible AVD (or connect a physical device), select that target, and press F5. The standard Android emulator uses `10.0.2.2` to reach the Windows host; use `ALSSAREEA_API_BASE_URL` for a physical device.
 
-Firebase and Google Maps credentials are optional external development configuration. `google-services.json` belongs at `src/AlSsareea.CustomerApp/Platforms/Android/google-services.json`; never fabricate or commit it. Without Firebase or Maps credentials, ordinary startup remains available, while the corresponding external capability cannot be runtime-validated.
+Firebase, Google Maps, and Google OAuth client identifiers are optional external development configuration. Set `ALSSAREEA_GOOGLE_CLIENT_ID` and, only when changing the registered callback, `ALSSAREEA_GOOGLE_REDIRECT_URI` (default `alssareea://oauth2redirect`). `google-services.json` belongs at `src/AlSsareea.CustomerApp/Platforms/Android/google-services.json`; never fabricate or commit it. Without provider configuration, ordinary email login and registration remain available and Google sign-in reports a localized unavailable result.
 
 Run:
 
@@ -35,7 +35,7 @@ dotnet test tests/AlSsareea.CustomerApp.UnitTests/AlSsareea.CustomerApp.UnitTest
 
 ## Session and security
 
-Access tokens exist only in memory. Rotating refresh tokens, expiry, and device identifier use MAUI SecureStorage. Startup restores through refresh; permanent rejection clears the session. Concurrent 401 responses share one refresh operation and retry once with the rotated access token. Logout calls the authenticated backend endpoint, clears secure and in-memory state, stops tracking, unregisters the remembered push-token record, and returns to Login. Tokens, OTPs, authorization headers, and card data are never logged or persisted in ordinary Preferences.
+Access tokens exist only in memory. Rotating refresh tokens, expiry, and device identifier use MAUI SecureStorage. Email registration and Google authentication both feed this same session path. Startup restores through refresh and resumes incomplete customer-profile creation without creating another Identity user; permanent rejection clears the session. Concurrent 401 responses share one refresh operation and retry once with the rotated access token. Logout calls the authenticated backend endpoint, clears secure and in-memory state, stops tracking, unregisters the remembered push-token record, and returns to Login. Passwords, Google credentials, tokens, OTPs, authorization headers, and card data are never logged or persisted in ordinary Preferences.
 
 ## Localization
 
@@ -55,4 +55,4 @@ Tracking loads the REST snapshot, connects to `/hubs/tracking` using only the ac
 
 ## Phase boundaries
 
-The verified Catalog customer product-details contract now drives ordered media, variants, option groups, availability, stable Cart IDs, and backend-authoritative configured pricing. Electronic payment remains Phase 22 and Support remains Phase 24. Real FCM/APNs delivery and Android map tiles still require deployment credentials and supported devices; no provider credentials are committed.
+The verified Catalog customer product-details contract now drives ordered media, variants, option groups, availability, stable Cart IDs, and backend-authoritative configured pricing. Customer authentication is email/password or Google; OTP remains backend security infrastructure and is not offered as a login method. Electronic payment remains Phase 22 and Support remains Phase 24. Real Google OAuth, FCM/APNs delivery, and Android map tiles still require deployment credentials and supported devices; no provider credentials are committed.

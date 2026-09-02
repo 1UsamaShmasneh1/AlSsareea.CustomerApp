@@ -43,6 +43,9 @@ public static class AppRoutes
     public const string Onboarding = "onboarding";
     public const string Login = "login";
     public const string Otp = "otp";
+    public const string RegisterChoice = "register-choice";
+    public const string RegisterEmail = "register-email";
+    public const string CompleteProfile = "complete-profile";
     public const string Home = "//main/home";
     public const string Search = "//main/search";
     public const string Cart = "//main/cart";
@@ -103,6 +106,10 @@ public static class UiErrorMapper
     public static string Map(Exception exception, ILocalizationService text, bool online) => exception switch
     {
         ApiException { Problem.Code: "auth.otp_resend_blocked" } => text["ErrorOtpResendBlocked"],
+        ApiException { Problem.Code: "auth.email_already_registered" } => text["ErrorEmailAlreadyRegistered"],
+        ApiException { Problem.Code: "auth.external_link_required" } => text["ErrorExternalLinkRequired"],
+        ApiException { Problem.Code: "auth.external_token_invalid" } => text["ErrorGoogleInvalid"],
+        ApiException { Problem.Code: "auth.external_provider_unavailable" } => text["ErrorGoogleUnavailable"],
         ApiException { Problem.Status: 429 } => text["ErrorRateLimit"],
         ApiException { Problem.Status: 401 } => text["ErrorUnauthorized"],
         ApiException { Problem.Status: 403 } => text["ErrorForbidden"],

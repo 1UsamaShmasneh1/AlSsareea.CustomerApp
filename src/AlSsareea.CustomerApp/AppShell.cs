@@ -18,6 +18,9 @@ public sealed class AppShell : Shell
         Items.Add(tabs);
         Register(AppRoutes.Onboarding, typeof(OnboardingPage));
         Register(AppRoutes.Login, typeof(LoginPage));
+        Register(AppRoutes.RegisterChoice, typeof(RegisterChoicePage));
+        Register(AppRoutes.RegisterEmail, typeof(RegisterEmailPage));
+        Register(AppRoutes.CompleteProfile, typeof(CompleteProfilePage));
         Register(AppRoutes.MerchantDetails, typeof(MerchantDetailsPage));
         Register(AppRoutes.Catalog, typeof(CatalogPage));
         Register(AppRoutes.ProductDetails, typeof(ProductDetailsPage));

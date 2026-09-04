@@ -1,5 +1,6 @@
 using AlSsareea.CustomerApp.Core;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 
 namespace AlSsareea.CustomerApp;
 
@@ -9,7 +10,7 @@ public static class MauiProgram
     {
         MauiAppBuilder builder = MauiApp.CreateBuilder();
         builder.UseMauiApp<App>();
-#if ANDROID || IOS || MACCATALYST
+#if (ANDROID && GOOGLE_MAPS_CONFIGURED) || IOS || MACCATALYST
         builder.UseMauiMaps();
 #endif
         builder.ConfigureFonts(fonts =>
@@ -31,9 +32,7 @@ public static class MauiProgram
             return new AuthenticationApi(new ApiClient(http));
         });
         builder.Services.AddSingleton<ISessionManager, SessionManager>();
-        builder.Services.AddSingleton(new GoogleClientConfiguration(
-            Environment.GetEnvironmentVariable("ALSSAREEA_GOOGLE_CLIENT_ID"),
-            Uri.TryCreate(Environment.GetEnvironmentVariable("ALSSAREEA_GOOGLE_REDIRECT_URI") ?? "alssareea://oauth2redirect", UriKind.Absolute, out Uri? googleRedirect) ? googleRedirect : null));
+        builder.Services.AddSingleton(ResolveGoogleConfiguration());
         builder.Services.AddSingleton<IGoogleAuthenticationService, GoogleAuthenticationService>();
         builder.Services.AddSingleton(sp =>
         {
@@ -98,6 +97,14 @@ public static class MauiProgram
         AppServices.Provider = app.Services;
         _ = app.Services.GetRequiredService<PushTokenBridge>();
         return app;
+    }
+
+    private static GoogleClientConfiguration ResolveGoogleConfiguration()
+    {
+        IReadOnlyDictionary<string, string> metadata = typeof(MauiProgram).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToDictionary(attribute => attribute.Key, attribute => attribute.Value ?? string.Empty, StringComparer.Ordinal);
+        metadata.TryGetValue("AlSsareea.GoogleClientId", out string? embeddedClientId);
+        metadata.TryGetValue("AlSsareea.GoogleRedirectUri", out string? embeddedRedirectUri);
+        return GoogleClientConfiguration.Resolve(Environment.GetEnvironmentVariable("ALSSAREEA_GOOGLE_CLIENT_ID"), Environment.GetEnvironmentVariable("ALSSAREEA_GOOGLE_REDIRECT_URI"), embeddedClientId, embeddedRedirectUri);
     }
 
     private static Uri ResolveBaseUri()

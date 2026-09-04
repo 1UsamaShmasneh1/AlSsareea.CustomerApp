@@ -1,5 +1,5 @@
 using AlSsareea.CustomerApp.Core;
-#if ANDROID || IOS || MACCATALYST
+#if (ANDROID && GOOGLE_MAPS_CONFIGURED) || IOS || MACCATALYST
 using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Maps;
 #endif
@@ -29,13 +29,13 @@ public sealed class OrderDetailsPage : RemotePage<OrderDetailsViewModel>, IQuery
 
 public sealed class TrackingPage : RemotePage<TrackingViewModel>, IQueryAttributable
 {
-#if ANDROID || IOS || MACCATALYST
+#if (ANDROID && GOOGLE_MAPS_CONFIGURED) || IOS || MACCATALYST
     private readonly Microsoft.Maui.Controls.Maps.Map map = new() { HeightRequest = 320, IsShowingUser = false };
 #endif
     public TrackingPage() : base("LiveTracking")
     {
         var connection = new Label(); connection.SetBinding(Label.TextProperty, nameof(TrackingViewModel.Connection), stringFormat: T("ConnectionFormat")); var point = new Label(); point.SetBinding(Label.TextProperty, "Location.Latitude", stringFormat: T("LatitudeFormat")); var longitude = new Label(); longitude.SetBinding(Label.TextProperty, "Location.Longitude", stringFormat: T("LongitudeFormat")); var timestamp = new Label(); timestamp.SetBinding(Label.TextProperty, "Location.RecordedAtUtc", stringFormat: T("UpdatedFormat")); var layout = new VerticalStackLayout { Padding = 20, Spacing = 12, Children = { new Label { Text = T("DriverLocation"), FontSize = 26, FontAttributes = FontAttributes.Bold }, connection } };
-#if ANDROID || IOS || MACCATALYST
+#if (ANDROID && GOOGLE_MAPS_CONFIGURED) || IOS || MACCATALYST
         layout.Add(map);
 #endif
         layout.Add(point); layout.Add(longitude); layout.Add(timestamp); layout.Add(new Label { Text = T("MapKeyNotice") }); AddState(layout); Content = new ScrollView { Content = layout }; ViewModel.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(TrackingViewModel.Location)) UpdateMap(); };
@@ -44,7 +44,7 @@ public sealed class TrackingPage : RemotePage<TrackingViewModel>, IQueryAttribut
     protected override async void OnDisappearing() { await ViewModel.StopAsync(); base.OnDisappearing(); }
     private void UpdateMap()
     {
-#if ANDROID || IOS || MACCATALYST
+#if (ANDROID && GOOGLE_MAPS_CONFIGURED) || IOS || MACCATALYST
         if (ViewModel.Location is null) return; var location = new Location(ViewModel.Location.Latitude, ViewModel.Location.Longitude); map.Pins.Clear(); map.Pins.Add(new Pin { Label = T("CurrentDeliveryLocation"), Location = location }); map.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromKilometers(1)));
 #endif
     }

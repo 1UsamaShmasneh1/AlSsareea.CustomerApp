@@ -81,8 +81,8 @@ public sealed class RegistrationTests
 
     [Theory]
     [InlineData(GoogleSignInStatus.Failed, "ErrorGoogleInvalid")]
-    [InlineData(GoogleSignInStatus.NotConfigured, "ErrorGoogleUnavailable")]
-    [InlineData(GoogleSignInStatus.Unsupported, "ErrorGoogleUnavailable")]
+    [InlineData(GoogleSignInStatus.NotConfigured, "ErrorGoogleNotConfigured")]
+    [InlineData(GoogleSignInStatus.Unsupported, "ErrorGoogleUnsupported")]
     public async Task Google_client_failure_is_localized(GoogleSignInStatus status, string expected)
     {
         var auth = new AuthStub();

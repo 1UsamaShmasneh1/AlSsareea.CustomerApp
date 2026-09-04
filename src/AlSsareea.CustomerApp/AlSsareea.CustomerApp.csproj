@@ -81,16 +81,28 @@
 		<DefineConstants>$(DefineConstants);FIREBASE_CONFIGURED</DefineConstants>
 	</PropertyGroup>
 
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' And '$(ALSSAREEA_GOOGLE_MAPS_API_KEY)' != ''">
+		<DefineConstants>$(DefineConstants);GOOGLE_MAPS_CONFIGURED</DefineConstants>
+	</PropertyGroup>
+
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' And '$(Configuration)' == 'Debug'">
-		<AndroidManifestPlaceholders>usesCleartextTraffic=true</AndroidManifestPlaceholders>
+		<AndroidManifestPlaceholders>usesCleartextTraffic=true;googleMapsApiKey=$(ALSSAREEA_GOOGLE_MAPS_API_KEY)</AndroidManifestPlaceholders>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' And '$(Configuration)' != 'Debug'">
-		<AndroidManifestPlaceholders>usesCleartextTraffic=false</AndroidManifestPlaceholders>
+		<AndroidManifestPlaceholders>usesCleartextTraffic=false;googleMapsApiKey=$(ALSSAREEA_GOOGLE_MAPS_API_KEY)</AndroidManifestPlaceholders>
 	</PropertyGroup>
 
 	<ItemGroup>
 	  <ProjectReference Include="..\AlSsareea.CustomerApp.Core\AlSsareea.CustomerApp.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(ALSSAREEA_GOOGLE_CLIENT_ID)' != ''">
+		<AssemblyMetadata Include="AlSsareea.GoogleClientId" Value="$(ALSSAREEA_GOOGLE_CLIENT_ID)" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(ALSSAREEA_GOOGLE_REDIRECT_URI)' != ''">
+		<AssemblyMetadata Include="AlSsareea.GoogleRedirectUri" Value="$(ALSSAREEA_GOOGLE_REDIRECT_URI)" />
 	</ItemGroup>
 
 </Project>

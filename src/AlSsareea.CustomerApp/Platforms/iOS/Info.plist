@@ -34,7 +34,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLSchemes</key>
-			<array><string>alssareea</string></array>
+			<array><string>com.alssareea.customer</string></array>
 		</dict>
 	</array>
 </dict>

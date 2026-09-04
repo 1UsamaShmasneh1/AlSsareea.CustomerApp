@@ -23,7 +23,7 @@ Install SDK 10.0.400 and the `android`, `ios`, `maccatalyst`, and `maui-windows`
 3. Open `AlSsareea.CustomerApp.slnx`, set `AlSsareea.CustomerApp` as the startup project, select `Windows Machine`, and press F5.
 4. For Android, install the emulator component and a compatible AVD (or connect a physical device), select that target, and press F5. The standard Android emulator uses `10.0.2.2` to reach the Windows host; use `ALSSAREEA_API_BASE_URL` for a physical device.
 
-Firebase, Google Maps, and Google OAuth client identifiers are optional external development configuration. Set `ALSSAREEA_GOOGLE_CLIENT_ID` and, only when changing the registered callback, `ALSSAREEA_GOOGLE_REDIRECT_URI` (default `alssareea://oauth2redirect`). `google-services.json` belongs at `src/AlSsareea.CustomerApp/Platforms/Android/google-services.json`; never fabricate or commit it. Without provider configuration, ordinary email login and registration remain available and Google sign-in reports a localized unavailable result.
+Firebase, Google Maps, and Google OAuth client identifiers are optional external development configuration. Before building Android, set `ALSSAREEA_GOOGLE_CLIENT_ID` to the public Android OAuth client ID and, only when changing the registered callback, `ALSSAREEA_GOOGLE_REDIRECT_URI` (default `com.alssareea.customer:/oauth2redirect`). The build embeds these public values as assembly metadata because a host shell's environment is not inherited by an installed mobile application; rebuild and redeploy after changing them. `google-services.json` belongs at `src/AlSsareea.CustomerApp/Platforms/Android/google-services.json`; never fabricate or commit it. Without provider configuration, ordinary email login and registration remain available and Google sign-in reports a localized not-configured result.
 
 Run:
 
@@ -43,7 +43,7 @@ English, Arabic, and Hebrew resources have automated key-parity validation. Lang
 
 ## Maps
 
-Geocode, reverse-geocode, and delivery eligibility come from backend Maps contracts. Saved addresses remain owned by Customers. Tracking uses MAUI Maps and still presents safe coordinates if tile rendering is unavailable. Android map tiles require a deployment-supplied Google Maps client key; no key is committed. iOS uses the platform map service.
+Geocode, reverse-geocode, and delivery eligibility come from backend Maps contracts. Saved addresses remain owned by Customers. Tracking uses MAUI Maps and still presents safe coordinates if tile rendering is unavailable. Android map tiles require `ALSSAREEA_GOOGLE_MAPS_API_KEY` to be set before building; without it, Android skips native Maps initialization and retains coordinate-only tracking. No key is committed. iOS uses the platform map service.
 
 ## Push
 

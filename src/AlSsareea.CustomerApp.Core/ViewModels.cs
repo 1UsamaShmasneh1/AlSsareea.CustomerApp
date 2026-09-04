@@ -67,7 +67,8 @@ public sealed class LoginViewModel(IAuthenticationApi auth, ISessionManager sess
         {
             GoogleSignInResult signIn = await google.SignInAsync(default);
             if (signIn.Status == GoogleSignInStatus.Cancelled) { State = RemoteStateKind.Content; return; }
-            if (signIn.Status is GoogleSignInStatus.NotConfigured or GoogleSignInStatus.Unsupported) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnavailable"]; return; }
+            if (signIn.Status == GoogleSignInStatus.NotConfigured) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleNotConfigured"]; return; }
+            if (signIn.Status == GoogleSignInStatus.Unsupported) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnsupported"]; return; }
             if (signIn.Status != GoogleSignInStatus.Succeeded || string.IsNullOrWhiteSpace(signIn.IdToken)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleInvalid"]; return; }
             GoogleAuthenticationResponse response = await auth.AuthenticateWithGoogleAsync(new(signIn.IdToken, signIn.Nonce, AuthenticationFlow.Device(DeviceIdentifier)), default);
             await AuthenticationFlow.RouteAfterAuthenticationAsync(response.Tokens, DeviceIdentifier, new(response.GivenName, response.FamilyName), session, profiles, navigation, default);
@@ -118,7 +119,8 @@ public sealed class RegisterChoiceViewModel(IAuthenticationApi auth, ISessionMan
         {
             GoogleSignInResult signIn = await google.SignInAsync(default);
             if (signIn.Status == GoogleSignInStatus.Cancelled) { State = RemoteStateKind.Content; return; }
-            if (signIn.Status is GoogleSignInStatus.NotConfigured or GoogleSignInStatus.Unsupported) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnavailable"]; return; }
+            if (signIn.Status == GoogleSignInStatus.NotConfigured) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleNotConfigured"]; return; }
+            if (signIn.Status == GoogleSignInStatus.Unsupported) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleUnsupported"]; return; }
             if (signIn.Status != GoogleSignInStatus.Succeeded || string.IsNullOrWhiteSpace(signIn.IdToken)) { State = RemoteStateKind.Error; ErrorMessage = Text["ErrorGoogleInvalid"]; return; }
             GoogleAuthenticationResponse response = await auth.AuthenticateWithGoogleAsync(new(signIn.IdToken, signIn.Nonce, AuthenticationFlow.Device(deviceIdentifier)), default);
             await AuthenticationFlow.RouteAfterAuthenticationAsync(response.Tokens, deviceIdentifier, new(response.GivenName, response.FamilyName), session, profiles, navigation, default);
